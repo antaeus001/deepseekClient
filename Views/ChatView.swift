@@ -5,10 +5,10 @@ struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @State private var inputText = ""
     @State private var scrollProxy: ScrollViewProxy?
-    @State private var isScrolled = false
-    @State private var showScrollToBottom = false
     @FocusState private var isInputFocused: Bool
-    @State private var lastMessageId: String?
+    
+    // 用于缓存视图的状态
+    @State private var visibleMessageIds = Set<String>()
     
     init(chat: Chat) {
         self.chat = chat
@@ -25,11 +25,22 @@ struct ChatView: View {
                             MessageView(message: message)
                                 .id(message.id)
                                 .transition(.opacity)
+                                // 使用 onAppear 和 onDisappear 跟踪可见消息
+                                .onAppear {
+                                    visibleMessageIds.insert(message.id)
+                                }
+                                .onDisappear {
+                                    visibleMessageIds.remove(message.id)
+                                }
                         }
                     }
                     .padding(.vertical, 20)
                 }
                 .background(Color(.systemGroupedBackground))
+                // 使用 ScrollView 的性能优化选项
+                .scrollDismissesKeyboard(.immediately)
+                .scrollIndicators(.hidden)
+                .animation(.none, value: viewModel.messages.count)
                 .onAppear {
                     scrollProxy = proxy
                     scrollToBottom(animated: false)
@@ -37,27 +48,13 @@ struct ChatView: View {
                 .onChange(of: viewModel.messages.count) { _ in
                     scrollToBottom()
                 }
-                // 监听最后一条消息的内容变化
                 .onChange(of: viewModel.messages.last?.content) { _ in
-                    scrollToBottom()
+                    // 只有当最后一条消息可见时才自动滚动
+                    if let lastMessage = viewModel.messages.last,
+                       visibleMessageIds.contains(lastMessage.id) {
+                        scrollToBottom()
+                    }
                 }
-                // 监听滚动位置
-                .simultaneousGesture(
-                    DragGesture().onChanged { _ in
-                        isScrolled = true
-                    }
-                )
-                .overlay(
-                    // 滚动到底部按钮
-                    ScrollToBottomButton(isVisible: isScrolled) {
-                        withAnimation {
-                            scrollToBottom()
-                            isScrolled = false
-                        }
-                    }
-                    .padding(.bottom),
-                    alignment: .bottom
-                )
             }
             
             // 输入区域
@@ -66,7 +63,6 @@ struct ChatView: View {
                     await viewModel.sendMessage(inputText)
                     inputText = ""
                     isInputFocused = false
-                    isScrolled = false
                 }
             }
             .focused($isInputFocused)
@@ -82,37 +78,12 @@ struct ChatView: View {
     
     private func scrollToBottom(animated: Bool = true) {
         guard let lastMessage = viewModel.messages.last else { return }
-        
-        // 如果消息 ID 变化或内容变化，都需要滚动
-        if lastMessageId != lastMessage.id || !isScrolled {
-            if animated {
-                withAnimation {
-                    scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
-                }
-            } else {
+        if animated {
+            withAnimation(.easeOut(duration: 0.3)) {
                 scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
             }
-            lastMessageId = lastMessage.id
+        } else {
+            scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
         }
-    }
-}
-
-// 滚动到底部按钮
-struct ScrollToBottomButton: View {
-    let isVisible: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.title2)
-                .foregroundColor(.blue)
-                .padding(8)
-                .background(Color(.systemBackground))
-                .clipShape(Circle())
-                .shadow(color: .black.opacity(0.1), radius: 3)
-        }
-        .opacity(isVisible ? 1 : 0)
-        .animation(.easeInOut, value: isVisible)
     }
 } 
