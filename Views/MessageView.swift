@@ -3,6 +3,9 @@ import MarkdownUI
 
 struct MessageView: View {
     let message: Message
+    @State private var displayedContent = ""
+    @State private var isTyping = false
+    private let typingSpeed: TimeInterval = 0.01
     
     var body: some View {
         HStack {
@@ -15,6 +18,42 @@ struct MessageView: View {
             }
         }
         .padding(.horizontal)
+        .onAppear {
+            if message.role == .assistant {
+                startTypingAnimation()
+            } else {
+                displayedContent = message.content
+            }
+        }
+        .onChange(of: message.content) { newContent in
+            if message.role == .assistant {
+                let newChars = newContent.dropFirst(displayedContent.count)
+                displayedContent += newChars
+            }
+        }
+    }
+    
+    private func startTypingAnimation() {
+        displayedContent = ""
+        isTyping = true
+        
+        var currentIndex = message.content.startIndex
+        func typeNextCharacter() {
+            guard currentIndex < message.content.endIndex else {
+                isTyping = false
+                return
+            }
+            
+            let nextIndex = message.content.index(after: currentIndex)
+            displayedContent += String(message.content[currentIndex..<nextIndex])
+            currentIndex = nextIndex
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + typingSpeed) {
+                typeNextCharacter()
+            }
+        }
+        
+        typeNextCharacter()
     }
     
     // AI 消息视图
@@ -41,10 +80,18 @@ struct MessageView: View {
                 }
             }
             
-            Markdown(message.content)
-                .textSelection(.enabled)
-                .markdownTheme(.gitHub)
-                .fixedSize(horizontal: false, vertical: true)
+            if isTyping {
+                Markdown(displayedContent)
+                    .textSelection(.enabled)
+                    .markdownTheme(.gitHub)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .animation(.easeInOut, value: displayedContent)
+            } else {
+                Markdown(message.content)
+                    .textSelection(.enabled)
+                    .markdownTheme(.gitHub)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(16)
         .background(

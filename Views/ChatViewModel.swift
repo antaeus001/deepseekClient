@@ -29,29 +29,37 @@ class ChatViewModel: ObservableObject {
         messages.append(newMessage)
         
         do {
-            var responseContent = ""
-            let stream = try await deepSeekService.sendMessage(content, chatId: chat.id)
-            
-            for try await text in stream {
-                responseContent += text
-            }
-            
+            // 创建 AI 响应消息
             let responseMessage = Message(
                 id: UUID().uuidString,
-                content: responseContent,
+                content: "",
                 role: .assistant,
                 timestamp: Date()
             )
-            
             messages.append(responseMessage)
+            
+            var accumulatedContent = ""
+            let stream = try await deepSeekService.sendMessage(content, chatId: chat.id)
+            
+            for try await text in stream {
+                accumulatedContent += text
+                // 更新最后一条消息的内容
+                if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
+                    messages[index] = Message(
+                        id: responseMessage.id,
+                        content: accumulatedContent,
+                        role: .assistant,
+                        timestamp: responseMessage.timestamp
+                    )
+                }
+            }
             
             // 保存到数据库
             try databaseService.saveMessage(value: newMessage, chatId: chat.id)
-            try databaseService.saveMessage(value: responseMessage, chatId: chat.id)
+            try databaseService.saveMessage(value: messages.last!, chatId: chat.id)
             
         } catch {
             print("Error sending message: \(error)")
-            // 更新消息状态为失败
             if let index = messages.firstIndex(where: { $0.id == newMessage.id }) {
                 messages[index].status = .failed
             }
