@@ -6,6 +6,8 @@ struct ChatView: View {
     @State private var inputText = ""
     @State private var scrollProxy: ScrollViewProxy?
     @State private var isScrolled = false
+    @State private var showScrollToBottom = false
+    @FocusState private var isInputFocused: Bool
     
     init(chat: Chat) {
         self.chat = chat
@@ -36,29 +38,59 @@ struct ChatView: View {
                         scrollToBottom()
                     }
                 }
+                .overlay(
+                    // 滚动到底部按钮
+                    ScrollToBottomButton(isVisible: showScrollToBottom) {
+                        withAnimation {
+                            scrollToBottom()
+                        }
+                    }
+                    .padding(.bottom),
+                    alignment: .bottom
+                )
             }
             
             // 输入区域
-            VStack(spacing: 0) {
-                Divider()
-                MessageInputView(text: $inputText) {
-                    Task {
-                        await viewModel.sendMessage(inputText)
-                        inputText = ""
-                    }
+            MessageInputView(text: $inputText) {
+                Task {
+                    await viewModel.sendMessage(inputText)
+                    inputText = ""
+                    isInputFocused = false
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 10)
             }
-            .background(
-                Color(.systemBackground)
-                    .shadow(color: .black.opacity(0.05), radius: 3, y: -2)
-            )
+            .focused($isInputFocused)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(chat.title)
+                    .font(.headline)
+            }
         }
     }
     
     private func scrollToBottom() {
         guard let lastMessage = viewModel.messages.last else { return }
         scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+    }
+}
+
+// 滚动到底部按钮
+struct ScrollToBottomButton: View {
+    let isVisible: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.title2)
+                .foregroundColor(.blue)
+                .padding(8)
+                .background(Color(.systemBackground))
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.1), radius: 3)
+        }
+        .opacity(isVisible ? 1 : 0)
+        .animation(.easeInOut, value: isVisible)
     }
 } 
