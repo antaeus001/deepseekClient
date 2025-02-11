@@ -8,6 +8,7 @@ struct ChatView: View {
     @State private var isScrolled = false
     @State private var showScrollToBottom = false
     @FocusState private var isInputFocused: Bool
+    @State private var lastMessageId: String?
     
     init(chat: Chat) {
         self.chat = chat
@@ -31,18 +32,27 @@ struct ChatView: View {
                 .background(Color(.systemGroupedBackground))
                 .onAppear {
                     scrollProxy = proxy
-                    scrollToBottom()
+                    scrollToBottom(animated: false)
                 }
                 .onChange(of: viewModel.messages.count) { _ in
-                    withAnimation {
-                        scrollToBottom()
-                    }
+                    scrollToBottom()
                 }
+                // 监听最后一条消息的内容变化
+                .onChange(of: viewModel.messages.last?.content) { _ in
+                    scrollToBottom()
+                }
+                // 监听滚动位置
+                .simultaneousGesture(
+                    DragGesture().onChanged { _ in
+                        isScrolled = true
+                    }
+                )
                 .overlay(
                     // 滚动到底部按钮
-                    ScrollToBottomButton(isVisible: showScrollToBottom) {
+                    ScrollToBottomButton(isVisible: isScrolled) {
                         withAnimation {
                             scrollToBottom()
+                            isScrolled = false
                         }
                     }
                     .padding(.bottom),
@@ -56,6 +66,7 @@ struct ChatView: View {
                     await viewModel.sendMessage(inputText)
                     inputText = ""
                     isInputFocused = false
+                    isScrolled = false
                 }
             }
             .focused($isInputFocused)
@@ -69,9 +80,20 @@ struct ChatView: View {
         }
     }
     
-    private func scrollToBottom() {
+    private func scrollToBottom(animated: Bool = true) {
         guard let lastMessage = viewModel.messages.last else { return }
-        scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+        
+        // 如果消息 ID 变化或内容变化，都需要滚动
+        if lastMessageId != lastMessage.id || !isScrolled {
+            if animated {
+                withAnimation {
+                    scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+                }
+            } else {
+                scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+            }
+            lastMessageId = lastMessage.id
+        }
     }
 }
 
