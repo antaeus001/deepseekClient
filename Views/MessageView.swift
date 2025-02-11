@@ -80,7 +80,13 @@ struct MessageView: View {
                 }
             }
             
-            if isTyping {
+            if message.content.isEmpty {
+                // 显示生成中动画
+                HStack {
+                    TypingIndicator()
+                        .padding(.vertical, 8)
+                }
+            } else if isTyping {
                 Markdown(displayedContent)
                     .textSelection(.enabled)
                     .markdownTheme(.gitHub)
