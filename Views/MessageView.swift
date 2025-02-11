@@ -39,7 +39,6 @@ struct MessageView: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                 }
-                Spacer(minLength: 0)
             }
             
             Markdown(message.content)
@@ -86,9 +85,8 @@ struct MessageView: View {
             
             Text(message.content)
                 .textSelection(.enabled)
-                .foregroundColor(.white)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .foregroundColor(.white)
         }
         .padding(16)
         .background(
@@ -104,4 +102,4 @@ struct MessageView: View {
         )
         .frame(maxWidth: UIScreen.main.bounds.width * 0.85, alignment: .trailing)
     }
-} 
+}
