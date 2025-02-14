@@ -7,17 +7,46 @@ typealias MessageStatus = Message.MessageStatus
 
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
-    private let chat: Chat
+    @Published var chatTitle: String = "新会话"
+    @Published private(set) var chat: Chat?
     private let deepSeekService = DeepSeekService.shared
     private let databaseService = DatabaseService.shared
     
-    init(chat: Chat) {
+    init(chat: Chat?) {
         self.chat = chat
-        self.messages = chat.messages
+        if let chat = chat {
+            self.messages = chat.messages
+            self.chatTitle = chat.title
+        }
+    }
+    
+    @MainActor
+    func createAndSendFirstMessage(_ content: String) async {
+        let timestamp = Date()
+        let chatId = UUID().uuidString
+        let title = String(content.prefix(20)).trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let newChat = Chat(
+            id: chatId,
+            title: title,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            messages: []
+        )
+        
+        do {
+            try databaseService.saveChat(newChat)
+            self.chat = newChat
+            self.chatTitle = title
+            await sendMessage(content)
+        } catch {
+            print("Error creating chat: \(error)")
+        }
     }
     
     @MainActor
     func sendMessage(_ content: String) async {
+        guard let currentChat = chat else { return }
         let newMessage = Message(
             id: UUID().uuidString,
             content: content,
@@ -27,6 +56,28 @@ class ChatViewModel: ObservableObject {
         )
         
         messages.append(newMessage)
+        
+        // 立即保存用户消息
+        do {
+            try databaseService.saveMessage(value: newMessage, chatId: currentChat.id)
+            
+            // 更新会话时间
+            let updatedChat = Chat(
+                id: currentChat.id,
+                title: chatTitle,
+                createdAt: currentChat.createdAt,
+                updatedAt: Date(),
+                messages: messages
+            )
+            try databaseService.saveChat(updatedChat)
+            self.chat = updatedChat
+        } catch {
+            print("Error saving user message: \(error)")
+            if let index = messages.firstIndex(where: { $0.id == newMessage.id }) {
+                messages[index].status = .failed
+            }
+            return
+        }
         
         do {
             // 创建 AI 响应消息
@@ -39,7 +90,7 @@ class ChatViewModel: ObservableObject {
             messages.append(responseMessage)
             
             var accumulatedContent = ""
-            let stream = try await deepSeekService.sendMessage(content, chatId: chat.id)
+            let stream = try await deepSeekService.sendMessage(content, chatId: currentChat.id)
             
             for try await text in stream {
                 accumulatedContent += text
@@ -54,13 +105,31 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
-            // 保存到数据库
-            try databaseService.saveMessage(value: newMessage, chatId: chat.id)
-            try databaseService.saveMessage(value: messages.last!, chatId: chat.id)
+            // 等待流式输出完成后，保存 AI 响应
+            let finalResponseMessage = Message(
+                id: responseMessage.id,
+                content: accumulatedContent,
+                role: .assistant,
+                timestamp: responseMessage.timestamp
+            )
+            
+            // 保存 AI 响应到数据库
+            try databaseService.saveMessage(value: finalResponseMessage, chatId: currentChat.id)
+            
+            // 更新会话
+            let updatedChat = Chat(
+                id: currentChat.id,
+                title: chatTitle,
+                createdAt: currentChat.createdAt,
+                updatedAt: Date(),
+                messages: messages
+            )
+            try databaseService.saveChat(updatedChat)
+            self.chat = updatedChat
             
         } catch {
-            print("Error sending message: \(error)")
-            if let index = messages.firstIndex(where: { $0.id == newMessage.id }) {
+            print("Error getting AI response: \(error)")
+            if let index = messages.lastIndex(where: { $0.role == .assistant }) {
                 messages[index].status = .failed
             }
         }

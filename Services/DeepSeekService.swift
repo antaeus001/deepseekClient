@@ -22,12 +22,10 @@ class DeepSeekService {
             "model": "deepseek-chat",
             "messages": messages,
             "temperature": 0.7,
-            "stream": true,
-            "max_tokens": 2000
+            "stream": true
         ]
         
         guard let url = URL(string: "\(settings.apiEndpoint)/v1/chat/completions") else {
-            print("❌ Invalid URL: \(settings.apiEndpoint)")
             throw URLError(.badURL)
         }
         
@@ -37,49 +35,73 @@ class DeepSeekService {
         request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         
-        print("📤 Sending request to: \(url.absoluteString)")
-        
         return AsyncStream { continuation in
-            Task {
-                do {
-                    let (stream, response) = try await URLSession.shared.bytes(for: request)
-                    
-                    if let httpResponse = response as? HTTPURLResponse {
-                        print("📥 Response status: \(httpResponse.statusCode)")
-                    }
-                    
-                    for try await line in stream.lines {
-                        // 忽略心跳消息
-                        if line == ": keep-alive" {
-                            print("💓 Heartbeat received")
-                            continue
-                        }
-                        
-                        // 处理数据行
-                        if line.hasPrefix("data: ") {
-                            let data = line.dropFirst(6)
-                            if data == "[DONE]" {
-                                print("✅ Stream completed")
-                                continuation.finish()
-                                break
-                            }
-                            
-                            if let jsonData = data.data(using: .utf8),
-                               let response = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                               let choices = response["choices"] as? [[String: Any]],
-                               let choice = choices.first,
-                               let delta = choice["delta"] as? [String: Any],
-                               let content = delta["content"] as? String {
-                                print("📝 Received content: \(content)")
-                                continuation.yield(content)
-                            }
-                        }
-                    }
-                } catch {
-                    print("❌ Stream error: \(error)")
-                    continuation.finish()
-                }
+            let delegate = StreamDelegate(continuation: continuation)
+            let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+            
+            let task = session.dataTask(with: request)
+            task.resume()
+            
+            continuation.onTermination = { _ in
+                task.cancel()
+                session.invalidateAndCancel()
             }
         }
+    }
+}
+
+private class StreamDelegate: NSObject, URLSessionDataDelegate {
+    let continuation: AsyncStream<String>.Continuation
+    private var buffer = ""
+    private var isCompleted = false  // 添加标志来跟踪是否已完成
+    
+    init(continuation: AsyncStream<String>.Continuation) {
+        self.continuation = continuation
+        super.init()
+    }
+    
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard !isCompleted,  // 检查是否已完成
+              let text = String(data: data, encoding: .utf8) else { return }
+        
+        // 处理接收到的数据
+        let lines = (buffer + text).components(separatedBy: "\n")
+        buffer = lines.last ?? ""
+        
+        for line in lines.dropLast() {
+            if line.isEmpty { continue }
+            if !line.hasPrefix("data: ") { continue }
+            
+            let data = String(line.dropFirst(6))
+            if data == "[DONE]" {
+                print("✅ Stream completed")
+                isCompleted = true  // 标记为已完成
+                continuation.finish()
+                return
+            }
+            
+            if let jsonData = data.data(using: .utf8),
+               let response = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+               let choices = response["choices"] as? [[String: Any]],
+               let choice = choices.first,
+               let delta = choice["delta"] as? [String: Any],
+               let content = delta["content"] as? String {
+                continuation.yield(content)
+            }
+        }
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        // 只有在未完成且有错误时才处理
+        if !isCompleted {
+            if let error = error {
+                print("❌ Stream error: \(error)")
+            }
+            continuation.finish()
+        }
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        completionHandler(.performDefaultHandling, nil)
     }
 } 

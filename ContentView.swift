@@ -10,92 +10,98 @@ import SwiftUI
 struct ContentView: View {
     @State private var selectedChat: Chat?
     @State private var showSettings = false
+    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
     
     var body: some View {
-        NavigationSplitView {
-            // 左侧会话列表
-            ChatListView(selectedChat: $selectedChat)
-                .navigationTitle("DeepSeek")
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: { showSettings = true }) {
-                            Image(systemName: "gear")
+        Group {
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                // iPhone 使用 NavigationStack
+                NavigationStack {
+                    ChatListView(selectedChat: $selectedChat)
+                        .navigationTitle("会话")
+                        .navigationDestination(item: $selectedChat) { chat in
+                            ChatView(chat: chat)
                         }
-                    }
-                    
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: createNewChat) {
-                            Image(systemName: "square.and.pencil")
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button {
+                                    showSettings = true
+                                } label: {
+                                    Image(systemName: "gear")
+                                }
+                            }
                         }
+                }
+            } else {
+                // iPad 使用 NavigationSplitView
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    ChatListView(selectedChat: $selectedChat)
+                        .navigationTitle("会话")
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button {
+                                    showSettings = true
+                                } label: {
+                                    Image(systemName: "gear")
+                                }
+                            }
+                        }
+                } detail: {
+                    if let chat = selectedChat {
+                        ChatView(chat: chat)
+                    } else {
+                        Text("选择或开始新的会话")
+                            .foregroundColor(.gray)
                     }
-                    
-                    #if DEBUG
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Debug DB") {
-                            do {
-                                DatabaseService.shared.debugPrintDatabasePath()
-                                try DatabaseService.shared.debugPrintAllData()
-                                DatabaseService.shared.debugReadDatabase()
-                            } catch {
-                                print("Debug error: \(error)")
+                }
+            }
+            #else
+            // macOS 使用 NavigationSplitView
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                ChatListView(selectedChat: $selectedChat)
+                    .navigationTitle("会话")
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button {
+                                showSettings = true
+                            } label: {
+                                Image(systemName: "gear")
                             }
                         }
                     }
-                    #endif
+            } detail: {
+                if let chat = selectedChat {
+                    ChatView(chat: chat)
+                } else {
+                    Text("选择或开始新的会话")
+                        .foregroundColor(.gray)
                 }
-        } detail: {
-            // 右侧聊天界面
-            if let chat = selectedChat {
-                ChatView(chat: chat)
-            } else {
-                Text("选择或创建一个会话开始聊天")
-                    .foregroundColor(.gray)
             }
+            #endif
         }
         .sheet(isPresented: $showSettings) {
             NavigationView {
                 SettingsView()
+                    .navigationTitle("设置")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("完成") {
+                                showSettings = false
+                            }
+                        }
+                    }
             }
-        }
-    }
-    
-    private func createNewChat() {
-        let newChat = Chat(
-            id: UUID().uuidString,
-            title: "新会话",
-            createdAt: Date(),
-            updatedAt: Date(),
-            messages: []
-        )
-        selectedChat = newChat
-        // TODO: 保存到数据库
-    }
-}
-
-// 会话列表视图
-struct ChatListView: View {
-    @Binding var selectedChat: Chat?
-    @State private var chats: [Chat] = []
-    
-    var body: some View {
-        List(chats, selection: $selectedChat) { chat in
-            NavigationLink(value: chat) {
-                VStack(alignment: .leading) {
-                    Text(chat.title)
-                        .lineLimit(1)
-                    Text(chat.messages.last?.content ?? "无消息")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .onAppear {
-            // TODO: 从数据库加载会话列表
         }
     }
 }
 
 #Preview {
     ContentView()
+}
+
+// 添加通知名称扩展
+extension Notification.Name {
+    static let refreshChatList = Notification.Name("refreshChatList")
 }

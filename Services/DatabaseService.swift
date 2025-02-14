@@ -72,11 +72,11 @@ class DatabaseService {
     
     // CRUD 操作
     func saveChat(_ chat: Chat) throws {
-        let sql = """
+        let insert = """
             INSERT OR REPLACE INTO chats (id, title, created_at, updated_at)
             VALUES (?, ?, ?, ?)
         """
-        try db?.run(sql, [
+        try db?.run(insert, [
             chat.id,
             chat.title,
             dateFormatter.string(from: chat.createdAt),
@@ -117,17 +117,60 @@ class DatabaseService {
         )
     }
     
-    func getMessages(chatId: String) throws -> [Message] {
-        let query = messages.filter(messageChatId == chatId)
-        let rows = try db?.prepare(query)
+    func fetchChats() async throws -> [Chat] {
+        guard let db = db else {
+            throw DatabaseError.connectionError
+        }
         
+        var result: [Chat] = []
+        
+        let query = """
+            SELECT id, title, created_at, updated_at 
+            FROM chats 
+            ORDER BY updated_at DESC
+        """
+        
+        let rows = try db.prepare(query)
+        for row in rows {
+            let chatId = row[0] as! String
+            let messages = try getMessages(chatId: chatId)
+            
+            let chat = Chat(
+                id: chatId,
+                title: row[1] as! String,
+                createdAt: dateFormatter.date(from: row[2] as! String) ?? Date(),
+                updatedAt: dateFormatter.date(from: row[3] as! String) ?? Date(),
+                messages: messages
+            )
+            result.append(chat)
+        }
+        return result
+    }
+    
+    func deleteChat(_ chat: Chat) throws {
+        let deleteMessages = "DELETE FROM messages WHERE chat_id = ?"
+        let deleteChat = "DELETE FROM chats WHERE id = ?"
+        
+        try db?.run(deleteMessages, [chat.id])
+        try db?.run(deleteChat, [chat.id])
+    }
+    
+    private func getMessages(chatId: String) throws -> [Message] {
+        let query = """
+            SELECT id, content, role, chat_id, timestamp, status 
+            FROM messages 
+            WHERE chat_id = ? 
+            ORDER BY timestamp ASC
+        """
+        
+        let rows = try db?.prepare(query, [chatId])
         return try rows?.map { row in
             Message(
-                id: row[messageId],
-                content: row[messageContent],
-                role: MessageRole(rawValue: row[messageRole])!,
-                timestamp: dateFormatter.date(from: row[messageTimestamp]) ?? Date(),
-                status: MessageStatus(rawValue: row[messageStatus])!
+                id: row[0] as! String,
+                content: row[1] as! String,
+                role: MessageRole(rawValue: row[2] as! String)!,
+                timestamp: dateFormatter.date(from: row[4] as! String) ?? Date(),
+                status: MessageStatus(rawValue: row[5] as! String) ?? .success
             )
         } ?? []
     }
@@ -182,4 +225,13 @@ class DatabaseService {
             print("Could not read database file")
         }
     }
+}
+
+// 添加错误类型
+enum DatabaseError: Error {
+    case connectionError
+    case queryError
+    case insertError
+    case updateError
+    case deleteError
 } 

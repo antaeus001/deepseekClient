@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct ChatView: View {
-    let chat: Chat
+    let chat: Chat?  // 可选，因为新会话时为 nil
+    let isNewChat: Bool
+    let onChatCreated: ((Chat?) -> Void)?  // 回调
     @StateObject private var viewModel: ChatViewModel
     @State private var inputText = ""
     @State private var scrollProxy: ScrollViewProxy?
@@ -10,8 +12,10 @@ struct ChatView: View {
     // 用于缓存视图的状态
     @State private var visibleMessageIds = Set<String>()
     
-    init(chat: Chat) {
+    init(chat: Chat? = nil, isNewChat: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
+        self.isNewChat = isNewChat
+        self.onChatCreated = onChatCreated
         _viewModel = StateObject(wrappedValue: ChatViewModel(chat: chat))
     }
     
@@ -60,7 +64,12 @@ struct ChatView: View {
             // 输入区域
             MessageInputView(text: $inputText) {
                 Task {
-                    await viewModel.sendMessage(inputText)
+                    if isNewChat {
+                        await viewModel.createAndSendFirstMessage(inputText)
+                        onChatCreated?(viewModel.chat)
+                    } else {
+                        await viewModel.sendMessage(inputText)
+                    }
                     inputText = ""
                     isInputFocused = false
                 }
@@ -70,7 +79,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text(chat.title)
+                Text(viewModel.chatTitle)
                     .font(.headline)
             }
         }
