@@ -6,32 +6,49 @@ struct SettingsView: View {
     @State private var showUserAgreement = false
     
     init() {
-        // 初始化时从 DeepSeekService 获取设置
         _settings = State(initialValue: DeepSeekService.shared.settings)
     }
     
     var body: some View {
-        Form {
-            Section(header: Text("API 配置")) {
-                TextField("API 地址", text: $settings.apiEndpoint)
-                SecureField("API Key", text: $settings.apiKey)
-            }
-            
-            Button("保存") {
-                DeepSeekService.shared.updateSettings(value: settings)
-            }
-            
-            Section("法律条款") {
-                Button("隐私政策") {
-                    showPrivacyPolicy = true
+        NavigationView {
+            Form {
+                Section {
+                    TextField("API 地址", text: $settings.apiEndpoint)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onChange(of: settings.apiEndpoint) { _ in
+                            DeepSeekService.shared.updateSettings(value: settings)
+                        }
+                    
+                    SecureField("API Key", text: $settings.apiKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onChange(of: settings.apiKey) { _ in
+                            DeepSeekService.shared.updateSettings(value: settings)
+                        }
+                } header: {
+                    Text("API 配置")
+                } footer: {
+                    Text("配置信息会自动保存")
+                        .font(.caption)
+                        .foregroundColor(.gray)
                 }
                 
-                Button("用户协议") {
-                    showUserAgreement = true
+                Section {
+                    Button("隐私政策") {
+                        showPrivacyPolicy = true
+                    }
+                    
+                    Button("用户协议") {
+                        showUserAgreement = true
+                    }
+                } header: {
+                    Text("法律条款")
                 }
             }
+            .navigationTitle("设置")
+            .navigationBarTitleDisplayMode(.inline)
         }
-        .navigationTitle("设置")
         .sheet(isPresented: $showPrivacyPolicy) {
             PrivacyPolicyView()
         }
