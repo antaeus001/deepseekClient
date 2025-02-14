@@ -15,7 +15,14 @@ class ChatViewModel: ObservableObject {
     init(chat: Chat?) {
         self.chat = chat
         if let chat = chat {
-            self.messages = chat.messages
+            // 确保所有历史消息的状态为 success
+            self.messages = chat.messages.map { message in
+                var updatedMessage = message
+                if message.role == .user {
+                    updatedMessage.status = .success
+                }
+                return updatedMessage
+            }
             self.chatTitle = chat.title
         }
     }
@@ -52,7 +59,7 @@ class ChatViewModel: ObservableObject {
             content: content,
             role: .user,
             timestamp: Date(),
-            status: .sending
+            status: .sending  // 初始状态为 sending
         )
         
         messages.append(newMessage)
@@ -60,6 +67,11 @@ class ChatViewModel: ObservableObject {
         // 立即保存用户消息
         do {
             try databaseService.saveMessage(value: newMessage, chatId: currentChat.id)
+            
+            // 更新用户消息状态为成功
+            if let index = messages.firstIndex(where: { $0.id == newMessage.id }) {
+                messages[index].status = .success
+            }
             
             // 更新会话时间
             let updatedChat = Chat(
@@ -80,12 +92,13 @@ class ChatViewModel: ObservableObject {
         }
         
         do {
-            // 创建 AI 响应消息
+            // 创建 AI 响应消息（使用打字机效果）
             let responseMessage = Message(
                 id: UUID().uuidString,
                 content: "",
                 role: .assistant,
-                timestamp: Date()
+                timestamp: Date(),
+                status: .streaming
             )
             messages.append(responseMessage)
             
@@ -94,23 +107,25 @@ class ChatViewModel: ObservableObject {
             
             for try await text in stream {
                 accumulatedContent += text
-                // 更新最后一条消息的内容
+                // 更新最后一条消息的内容，保持打字机效果
                 if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
                     messages[index] = Message(
                         id: responseMessage.id,
                         content: accumulatedContent,
                         role: .assistant,
-                        timestamp: responseMessage.timestamp
+                        timestamp: responseMessage.timestamp,
+                        status: .streaming
                     )
                 }
             }
             
-            // 等待流式输出完成后，保存 AI 响应
+            // 流式输出完成后，保存最终消息
             let finalResponseMessage = Message(
                 id: responseMessage.id,
                 content: accumulatedContent,
                 role: .assistant,
-                timestamp: responseMessage.timestamp
+                timestamp: responseMessage.timestamp,
+                status: .success
             )
             
             // 保存 AI 响应到数据库
@@ -134,4 +149,4 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
-} 
+}

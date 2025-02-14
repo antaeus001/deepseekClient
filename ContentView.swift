@@ -33,6 +33,20 @@ struct ContentView: View {
                             }
                         }
                 }
+                .sheet(isPresented: $showSettings) {
+                    NavigationView {
+                        SettingsView()
+                            .navigationTitle("设置")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarTrailing) {
+                                    Button("完成") {
+                                        showSettings = false
+                                    }
+                                }
+                            }
+                    }
+                }
             } else {
                 // iPad 使用 NavigationSplitView
                 NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -53,6 +67,20 @@ struct ContentView: View {
                     } else {
                         Text("选择或开始新的会话")
                             .foregroundColor(.gray)
+                    }
+                }
+                .sheet(isPresented: $showSettings) {
+                    NavigationView {
+                        SettingsView()
+                            .navigationTitle("设置")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarTrailing) {
+                                    Button("完成") {
+                                        showSettings = false
+                                    }
+                                }
+                            }
                     }
                 }
             }
@@ -78,21 +106,21 @@ struct ContentView: View {
                         .foregroundColor(.gray)
                 }
             }
-            #endif
-        }
-        .sheet(isPresented: $showSettings) {
-            NavigationView {
-                SettingsView()
-                    .navigationTitle("设置")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("完成") {
-                                showSettings = false
+            .sheet(isPresented: $showSettings) {
+                NavigationView {
+                    SettingsView()
+                        .navigationTitle("设置")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("完成") {
+                                    showSettings = false
+                                }
                             }
                         }
-                    }
+                }
             }
+            #endif
         }
     }
 }
