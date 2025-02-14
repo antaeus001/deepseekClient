@@ -3,9 +3,10 @@ import Foundation
 struct Message: Identifiable, Codable {
     let id: String
     let content: String
+    let reasoningContent: String?
     let role: MessageRole
     let timestamp: Date
-    var status: MessageStatus
+    var status: MessageStatus = .success
     
     enum MessageRole: String, Codable {
         case user
@@ -25,9 +26,10 @@ struct Message: Identifiable, Codable {
         static let streaming = MessageStatus(rawValue: "streaming")
     }
     
-    init(id: String, content: String, role: MessageRole, timestamp: Date, status: MessageStatus = .success) {
+    init(id: String, content: String, reasoningContent: String?, role: MessageRole, timestamp: Date, status: MessageStatus = .success) {
         self.id = id
         self.content = content
+        self.reasoningContent = reasoningContent
         self.role = role
         self.timestamp = timestamp
         self.status = status

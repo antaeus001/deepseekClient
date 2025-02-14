@@ -59,9 +59,10 @@ class ChatViewModel: ObservableObject {
         let newMessage = Message(
             id: UUID().uuidString,
             content: content,
+            reasoningContent: nil,
             role: .user,
             timestamp: Date(),
-            status: .sending  // 初始状态为 sending
+            status: .sending
         )
         
         messages.append(newMessage)
@@ -94,10 +95,11 @@ class ChatViewModel: ObservableObject {
         }
         
         do {
-            // 创建 AI 响应消息（使用打字机效果）
+            // 创建 AI 响应消息
             let responseMessage = Message(
                 id: UUID().uuidString,
                 content: "",
+                reasoningContent: "",  // 初始化为空字符串
                 role: .assistant,
                 timestamp: Date(),
                 status: .streaming
@@ -105,15 +107,21 @@ class ChatViewModel: ObservableObject {
             messages.append(responseMessage)
             
             var accumulatedContent = ""
+            var accumulatedReasoning = ""
             let stream = try await deepSeekService.sendMessage(content, chatId: currentChat.id)
             
-            for try await text in stream {
+            for try await (text, reasoning) in stream {
                 accumulatedContent += text
-                // 更新最后一条消息的内容，保持打字机效果
+                if let reasoning = reasoning {
+                    accumulatedReasoning = reasoning
+                    print("Updating message with reasoning: \(reasoning)")  // 添加调试日志
+                }
+                
                 if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
                     messages[index] = Message(
                         id: responseMessage.id,
                         content: accumulatedContent,
+                        reasoningContent: accumulatedReasoning.isEmpty ? nil : accumulatedReasoning,
                         role: .assistant,
                         timestamp: responseMessage.timestamp,
                         status: .streaming
@@ -125,13 +133,23 @@ class ChatViewModel: ObservableObject {
             let finalResponseMessage = Message(
                 id: responseMessage.id,
                 content: accumulatedContent,
+                reasoningContent: accumulatedReasoning.isEmpty ? nil : accumulatedReasoning,
                 role: .assistant,
                 timestamp: responseMessage.timestamp,
                 status: .success
             )
             
+            // 打印调试信息
+            print("Final message content: \(accumulatedContent)")
+            print("Final reasoning content: \(accumulatedReasoning)")
+            
             // 保存 AI 响应到数据库
             try databaseService.saveMessage(value: finalResponseMessage, chatId: currentChat.id)
+            
+            // 更新消息列表中的最后一条消息
+            if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
+                messages[index] = finalResponseMessage
+            }
             
             // 更新会话
             let updatedChat = Chat(

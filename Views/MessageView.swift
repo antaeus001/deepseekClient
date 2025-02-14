@@ -3,93 +3,47 @@ import MarkdownUI
 
 struct MessageView: View {
     let message: Message
+    @State private var displayedReasoning: String?
     
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            // 用户消息靠右，AI消息靠左
+        VStack(alignment: .leading, spacing: 8) {
             if message.role == .assistant {
-                // 头像
-                Circle()
-                    .fill(Color.green.opacity(0.1))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "brain.head.profile")
-                            .foregroundColor(.green)
-                            .font(.system(size: 18))
-                    )
-            }
-            
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                // 时间显示（如果需要）
-                Text(formatTime(message.timestamp))
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray.opacity(0.8))
-                
-                // 消息气泡
-                HStack {
-                    if message.role == .user { Spacer(minLength: 60) }
-                    
-                    VStack(alignment: .leading, spacing: 0) {
-                        if message.status == .streaming {
-                            TypewriterText(text: message.content)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                        } else {
-                            MessageContentView(content: message.content)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
+                Group {
+                    if let reasoning = message.reasoningContent,
+                       !reasoning.isEmpty {
+                        // 推理内容
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("推理过程：")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                            
+                            Text(reasoning)
+                                .font(.system(.body))
+                                .foregroundColor(.gray)
+                                .id(reasoning)  // 使用内容作为 id 来强制更新
                         }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(8)
                         
-                        // 状态指示器
-                        if message.status == .sending {
-                            HStack(spacing: 4) {
-                                ProgressView()
-                                    .scaleEffect(0.5)
-                                Text("发送中...")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.gray)
-                            }
-                            .padding(.leading, 12)
-                            .padding(.bottom, 6)
-                        } else if message.status == .failed {
-                            HStack(spacing: 4) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.red)
-                                Text("发送失败")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.red)
-                            }
-                            .padding(.leading, 12)
-                            .padding(.bottom, 6)
-                        }
+                        Divider()
+                            .padding(.vertical, 8)
                     }
-                    .background(
-                        message.role == .user ?
-                            Color(red: 149/255, green: 236/255, blue: 105/255) :
-                            Color.white
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    // 添加微信风格的阴影
-                    .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
-                    
-                    if message.role == .assistant { Spacer(minLength: 60) }
                 }
+                .animation(.easeInOut, value: message.reasoningContent)
             }
             
-            // 用户头像
-            if message.role == .user {
-                Circle()
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .foregroundColor(.blue)
-                            .font(.system(size: 18))
-                    )
-            }
+            // 主要内容
+            MessageContentView(content: message.content)
+                .textSelection(.enabled)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(message.role == .assistant ? Color(.systemBackground) : Color.blue)
+        )
+        .padding(.horizontal)
     }
     
     private func formatTime(_ date: Date) -> String {

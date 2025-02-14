@@ -4,6 +4,7 @@ import SQLite
 class DatabaseService {
     static let shared = DatabaseService()
     private var db: Connection?
+    private let store = NSUbiquitousKeyValueStore.default
     
     // 表定义
     private let chats = Table("chats")
@@ -18,6 +19,7 @@ class DatabaseService {
     // Messages 表列定义
     private let messageId = Expression<String>(value: "id")
     private let messageContent = Expression<String>(value: "content")
+    private let messageReasoningContent = Expression<String?>(value: "reasoning_content")
     private let messageRole = Expression<String>(value: "role")
     private let messageChatId = Expression<String>(value: "chat_id")
     private let messageTimestamp = Expression<String>(value: "timestamp")
@@ -42,6 +44,7 @@ class DatabaseService {
         do {
             db = try Connection("\(path)/deepseek.sqlite3")
             try createTables()
+            try migrateDatabase()
         } catch {
             print("Database connection error: \(error)")
         }
@@ -61,6 +64,7 @@ class DatabaseService {
             CREATE TABLE IF NOT EXISTS messages (
                 id TEXT PRIMARY KEY,
                 content TEXT,
+                reasoning_content TEXT,
                 role TEXT,
                 chat_id TEXT,
                 timestamp TEXT,
@@ -68,6 +72,50 @@ class DatabaseService {
                 FOREIGN KEY(chat_id) REFERENCES chats(id)
             )
         """)
+    }
+    
+    private func migrateDatabase() throws {
+        // 检查是否需要迁移
+        let tableInfo = try db?.prepare("PRAGMA table_info(messages)")
+        let hasReasoningContent = tableInfo?.contains { row in
+            let name = row[1] as? String
+            return name == "reasoning_content"
+        } ?? false
+        
+        if !hasReasoningContent {
+            print("Migrating database to add reasoning_content column...")
+            
+            try db?.transaction {
+                // 1. 重命名旧表
+                try db?.execute("ALTER TABLE messages RENAME TO messages_old")
+                
+                // 2. 创建新表
+                try db?.execute("""
+                    CREATE TABLE messages (
+                        id TEXT PRIMARY KEY,
+                        content TEXT,
+                        reasoning_content TEXT,
+                        role TEXT,
+                        chat_id TEXT,
+                        timestamp TEXT,
+                        status TEXT,
+                        FOREIGN KEY(chat_id) REFERENCES chats(id)
+                    )
+                """)
+                
+                // 3. 复制数据
+                try db?.execute("""
+                    INSERT INTO messages (id, content, reasoning_content, role, chat_id, timestamp, status)
+                    SELECT id, content, NULL, role, chat_id, timestamp, status
+                    FROM messages_old
+                """)
+                
+                // 4. 删除旧表
+                try db?.execute("DROP TABLE messages_old")
+            }
+            
+            print("Database migration completed successfully")
+        }
     }
     
     // CRUD 操作
@@ -90,12 +138,13 @@ class DatabaseService {
     
     func saveMessage(value message: Message, chatId: String) throws {
         let sql = """
-            INSERT OR REPLACE INTO messages (id, content, role, chat_id, timestamp, status)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO messages (id, content, reasoning_content, role, chat_id, timestamp, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """
         try db?.run(sql, [
             message.id,
             message.content,
+            message.reasoningContent,
             message.role.rawValue,
             chatId,
             dateFormatter.string(from: message.timestamp),
@@ -157,7 +206,7 @@ class DatabaseService {
     
     private func getMessages(chatId: String) throws -> [Message] {
         let query = """
-            SELECT id, content, role, chat_id, timestamp, status 
+            SELECT id, content, reasoning_content, role, chat_id, timestamp, status 
             FROM messages 
             WHERE chat_id = ? 
             ORDER BY timestamp ASC
@@ -168,9 +217,10 @@ class DatabaseService {
             Message(
                 id: row[0] as! String,
                 content: row[1] as! String,
-                role: MessageRole(rawValue: row[2] as! String)!,
-                timestamp: dateFormatter.date(from: row[4] as! String) ?? Date(),
-                status: MessageStatus(rawValue: row[5] as! String) ?? .success
+                reasoningContent: row[2] as? String,
+                role: MessageRole(rawValue: row[3] as! String)!,
+                timestamp: dateFormatter.date(from: row[5] as! String) ?? Date(),
+                status: MessageStatus(rawValue: row[6] as! String) ?? .success
             )
         } ?? []
     }
@@ -200,6 +250,7 @@ class DatabaseService {
             for row in messageRows {
                 print("Message ID: \(row[messageId])")
                 print("Content: \(row[messageContent])")
+                print("Reasoning Content: \(row[messageReasoningContent] ?? "None")")
                 print("Role: \(row[messageRole])")
                 print("Chat ID: \(row[messageChatId])")
                 print("Timestamp: \(row[messageTimestamp])")

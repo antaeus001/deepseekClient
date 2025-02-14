@@ -18,7 +18,7 @@ class DeepSeekService {
         currentModel = model
     }
     
-    func sendMessage(_ content: String, chatId: String) async throws -> AsyncThrowingStream<String, Error> {
+    func sendMessage(_ content: String, chatId: String) async throws -> AsyncThrowingStream<(String, String?), Error> {
         let messages = [
             ["role": "user", "content": content]
         ]
@@ -61,20 +61,21 @@ class DeepSeekService {
 }
 
 private class StreamDelegate: NSObject, URLSessionDataDelegate {
-    let continuation: AsyncThrowingStream<String, Error>.Continuation
+    let continuation: AsyncThrowingStream<(String, String?), Error>.Continuation
     private var buffer = ""
-    private var isCompleted = false  // 添加标志来跟踪是否已完成
+    private var isCompleted = false
+    private var reasoningContent = ""
+    private var isReasoning = false
+    private var hasReasoningFlag = false
     
-    init(continuation: AsyncThrowingStream<String, Error>.Continuation) {
+    init(continuation: AsyncThrowingStream<(String, String?), Error>.Continuation) {
         self.continuation = continuation
         super.init()
     }
     
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard !isCompleted,  // 检查是否已完成
-              let text = String(data: data, encoding: .utf8) else { return }
+        guard !isCompleted, let text = String(data: data, encoding: .utf8) else { return }
         
-        // 处理接收到的数据
         let lines = (buffer + text).components(separatedBy: "\n")
         buffer = lines.last ?? ""
         
@@ -85,7 +86,7 @@ private class StreamDelegate: NSObject, URLSessionDataDelegate {
             let data = String(line.dropFirst(6))
             if data == "[DONE]" {
                 print("✅ Stream completed")
-                isCompleted = true  // 标记为已完成
+                isCompleted = true
                 continuation.finish()
                 return
             }
@@ -94,9 +95,23 @@ private class StreamDelegate: NSObject, URLSessionDataDelegate {
                let response = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
                let choices = response["choices"] as? [[String: Any]],
                let choice = choices.first,
-               let delta = choice["delta"] as? [String: Any],
-               let content = delta["content"] as? String {
-                continuation.yield(content)
+               let delta = choice["delta"] as? [String: Any] {
+                
+                // 处理推理标志
+                if let reasoningFlag = delta["reasoning_flag"] as? Bool {
+                    isReasoning = reasoningFlag
+                    hasReasoningFlag = true
+                }
+                
+                // 处理推理内容
+                if let reasoningContent = delta["reasoning_content"] as? String {
+                    self.reasoningContent += reasoningContent
+                }
+                
+                // 处理主要内容
+                if let content = delta["content"] as? String {
+                    continuation.yield((content, self.reasoningContent))
+                }
             }
         }
     }
