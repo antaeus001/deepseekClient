@@ -21,7 +21,13 @@ struct MessageView: View {
                 Spacer(minLength: 32)  // 用户消息时左侧占位
             }
             
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
+            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
+                // 时间显示
+                Text(formatTime(message.timestamp))
+                    .font(.system(size: 12))
+                    .foregroundColor(message.role == .user ? .white.opacity(0.6) : .gray)
+                    .padding(.bottom, 2)
+                
                 if message.role == .assistant {
                     Group {
                         if let reasoning = message.reasoningContent,
@@ -56,7 +62,9 @@ struct MessageView: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(message.role == .assistant ? Color(.systemBackground) : Color.blue)
+                    .fill(message.role == .assistant ? 
+                          Color(.systemBackground) : 
+                          Color.blue.opacity(0.8))
             )
             
             if message.role == .user {

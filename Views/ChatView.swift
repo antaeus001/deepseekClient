@@ -111,7 +111,7 @@ struct ChatView: View {
                 Rectangle()
                     .frame(height: 1)
                     .foregroundColor(Color(.separator))
-                    .opacity(0.8),
+                    .opacity(0.5),
                 alignment: .top
             )
         }
