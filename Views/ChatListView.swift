@@ -170,20 +170,29 @@ struct ChatRow: View {
     let chat: Chat
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(chat.title)
-                .font(.headline)
-                .lineLimit(1)
-            
-            if let lastMessage = chat.messages.last {
-                Text(lastMessage.content)
-                    .font(.subheadline)
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(chat.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                
+                if let lastMessage = chat.messages.last {
+                    Text(lastMessage.content)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                }
+                
+                Text(formatDate(chat.updatedAt))
+                    .font(.caption)
                     .foregroundColor(.gray)
-                    .lineLimit(2)
             }
             
-            Text(formatDate(chat.updatedAt))
-                .font(.caption)
+            Spacer()
+            
+            // 添加箭头图标
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14))
                 .foregroundColor(.gray)
         }
         .padding(.vertical, 8)
