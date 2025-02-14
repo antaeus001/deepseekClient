@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @State private var settings: AppSettings
+    @State private var showPrivacyPolicy = false
+    @State private var showUserAgreement = false
     
     init() {
         // 初始化时从 DeepSeekService 获取设置
@@ -18,7 +20,23 @@ struct SettingsView: View {
             Button("保存") {
                 DeepSeekService.shared.updateSettings(value: settings)
             }
+            
+            Section("法律条款") {
+                Button("隐私政策") {
+                    showPrivacyPolicy = true
+                }
+                
+                Button("用户协议") {
+                    showUserAgreement = true
+                }
+            }
         }
         .navigationTitle("设置")
+        .sheet(isPresented: $showPrivacyPolicy) {
+            PrivacyPolicyView()
+        }
+        .sheet(isPresented: $showUserAgreement) {
+            UserAgreementView()
+        }
     }
 } 
