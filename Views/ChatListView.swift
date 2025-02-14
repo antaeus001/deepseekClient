@@ -170,78 +170,30 @@ struct ChatRow: View {
     let chat: Chat
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                // 图标
-                Circle()
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "bubble.left.fill")
-                            .foregroundColor(.blue)
-                            .font(.system(size: 18))
-                    )
-                
-                // 主要内容
-                VStack(alignment: .leading, spacing: 4) {
-                    // 标题和时间
-                    HStack {
-                        Text(chat.title)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                        
-                        Spacer()
-                        
-                        Text(timeString(from: chat.updatedAt))
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                    }
-                    
-                    // 最后一条消息预览
-                    if let lastMessage = chat.messages.last {
-                        HStack {
-                            if lastMessage.role == .assistant {
-                                Text("AI: ")
-                                    .foregroundColor(.blue)
-                                    .font(.system(size: 14))
-                            }
-                            Text(lastMessage.content)
-                                .font(.system(size: 14))
-                                .foregroundColor(.gray)
-                                .lineLimit(1)
-                        }
-                    }
-                }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(chat.title)
+                .font(.headline)
+                .lineLimit(1)
+            
+            if let lastMessage = chat.messages.last {
+                Text(lastMessage.content)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .lineLimit(2)
             }
+            
+            Text(formatDate(chat.updatedAt))
+                .font(.caption)
+                .foregroundColor(.gray)
         }
         .padding(.vertical, 8)
     }
     
-    private func timeString(from date: Date) -> String {
-        let now = Date()
-        let calendar = Calendar.current
-        
-        if calendar.isDateInToday(date) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            return formatter.string(from: date)
-        } else if calendar.isDateInYesterday(date) {
-            return "昨天"
-        } else if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEEE"
-            formatter.locale = Locale(identifier: "zh_CN")
-            return formatter.string(from: date)
-        } else if calendar.isDate(date, equalTo: now, toGranularity: .year) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "M月d日"
-            return formatter.string(from: date)
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy年M月d日"
-            return formatter.string(from: date)
-        }
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        formatter.locale = Locale(identifier: "zh_CN")
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
