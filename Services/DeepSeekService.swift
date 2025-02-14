@@ -3,6 +3,7 @@ import Foundation
 class DeepSeekService {
     static let shared = DeepSeekService()
     var settings: AppSettings
+    private var currentModel = "deepseek-chat"
     
     private init() {
         self.settings = UserDefaults.standard.getValue(AppSettings.self, forKey: "appSettings") ?? AppSettings.default
@@ -13,17 +14,26 @@ class DeepSeekService {
         UserDefaults.standard.setValue(newSettings, forKey: "appSettings")
     }
     
-    func sendMessage(_ message: String, chatId: String) async throws -> AsyncStream<String> {
-        let messages: [[String: Any]] = [
-            ["role": "user", "content": message]
+    func setModel(_ model: String) {
+        currentModel = model
+    }
+    
+    func sendMessage(_ content: String, chatId: String) async throws -> AsyncThrowingStream<String, Error> {
+        let messages = [
+            ["role": "user", "content": content]
         ]
         
         let parameters: [String: Any] = [
-            "model": "deepseek-chat",
+            "model": currentModel,
             "messages": messages,
-            "temperature": 0.7,
             "stream": true
         ]
+        
+        // 打印请求内容
+        if let jsonData = try? JSONSerialization.data(withJSONObject: parameters, options: .prettyPrinted),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("Request body: \(jsonString)")
+        }
         
         guard let url = URL(string: "\(settings.apiEndpoint)/v1/chat/completions") else {
             throw URLError(.badURL)
@@ -35,7 +45,7 @@ class DeepSeekService {
         request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         
-        return AsyncStream { continuation in
+        return AsyncThrowingStream { continuation in
             let delegate = StreamDelegate(continuation: continuation)
             let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
             
@@ -51,11 +61,11 @@ class DeepSeekService {
 }
 
 private class StreamDelegate: NSObject, URLSessionDataDelegate {
-    let continuation: AsyncStream<String>.Continuation
+    let continuation: AsyncThrowingStream<String, Error>.Continuation
     private var buffer = ""
     private var isCompleted = false  // 添加标志来跟踪是否已完成
     
-    init(continuation: AsyncStream<String>.Continuation) {
+    init(continuation: AsyncThrowingStream<String, Error>.Continuation) {
         self.continuation = continuation
         super.init()
     }

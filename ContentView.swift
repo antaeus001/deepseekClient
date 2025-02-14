@@ -62,12 +62,13 @@ struct ContentView: View {
                             }
                         }
                 } detail: {
-                    if let chat = selectedChat {
-                        ChatView(chat: chat)
-                    } else {
-                        Text("选择或开始新的会话")
-                            .foregroundColor(.gray)
-                    }
+                    ChatView(
+                        chat: selectedChat,
+                        isNewChat: selectedChat == nil,
+                        onChatCreated: { newChat in
+                            selectedChat = newChat
+                        }
+                    )
                 }
                 .sheet(isPresented: $showSettings) {
                     NavigationView {
@@ -99,12 +100,13 @@ struct ContentView: View {
                         }
                     }
             } detail: {
-                if let chat = selectedChat {
-                    ChatView(chat: chat)
-                } else {
-                    Text("选择或开始新的会话")
-                        .foregroundColor(.gray)
-                }
+                ChatView(
+                    chat: selectedChat,
+                    isNewChat: selectedChat == nil,
+                    onChatCreated: { newChat in
+                        selectedChat = newChat
+                    }
+                )
             }
             .sheet(isPresented: $showSettings) {
                 NavigationView {

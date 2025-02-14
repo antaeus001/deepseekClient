@@ -9,21 +9,23 @@ class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var chatTitle: String = "新会话"
     @Published private(set) var chat: Chat?
+    @Published var isDeepThinking = false
+    
     private let deepSeekService = DeepSeekService.shared
     private let databaseService = DatabaseService.shared
     
-    init(chat: Chat?) {
+    init(chat: Chat? = nil) {
         self.chat = chat
         if let chat = chat {
-            // 确保所有历史消息的状态为 success
-            self.messages = chat.messages.map { message in
-                var updatedMessage = message
-                if message.role == .user {
-                    updatedMessage.status = .success
-                }
-                return updatedMessage
-            }
+            self.messages = chat.messages
             self.chatTitle = chat.title
+        }
+    }
+    
+    func toggleDeepThinking(_ isEnabled: Bool) {
+        withAnimation(.spring(duration: 0.3)) {  // 添加动画
+            isDeepThinking = isEnabled
+            deepSeekService.setModel(isEnabled ? "deepseek-reasoner" : "deepseek-chat")
         }
     }
     
@@ -149,4 +151,11 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
+    
+    var hasAIResponse: Bool {
+        messages.contains { message in 
+            message.role == .assistant && message.status == .success
+        }
+    }
 }
+
