@@ -99,7 +99,7 @@ class ChatViewModel: ObservableObject {
             let responseMessage = Message(
                 id: UUID().uuidString,
                 content: "",
-                reasoningContent: "",
+                reasoningContent: "",  // 初始化为空字符串
                 role: .assistant,
                 timestamp: Date(),
                 status: .streaming
@@ -108,16 +108,16 @@ class ChatViewModel: ObservableObject {
             
             var accumulatedContent = ""
             var accumulatedReasoning = ""
+            var currentReasoning = ""  // 用于累积当前的推理内容
             let stream = try await deepSeekService.sendMessage(content, chatId: currentChat.id)
             
             for try await (text, reasoning) in stream {
                 accumulatedContent += text
+                
                 if let reasoning = reasoning {
-                    // 只在推理内容发生变化时才更新
-                    if reasoning != accumulatedReasoning {
-                        accumulatedReasoning = reasoning
-                        print("Updating message with reasoning: \(reasoning)")
-                    }
+                    // 如果收到新的推理内容，立即更新
+                    currentReasoning = reasoning
+                    accumulatedReasoning = currentReasoning
                 }
                 
                 if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {

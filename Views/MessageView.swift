@@ -31,16 +31,8 @@ struct MessageView: View {
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(.gray)
                                 
-                                if message.status == .streaming {
-                                    TypewriterText(text: reasoning)
-                                        .foregroundColor(.gray)
-                                        .transaction { transaction in
-                                            transaction.animation = .none  // 禁用隐式动画
-                                        }
-                                } else {
-                                    MessageContentView(content: reasoning)
-                                        .foregroundColor(.gray)
-                                }
+                                TypewriterText(text: reasoning)
+                                    .foregroundColor(.gray)
                             }
                             .padding(.vertical, 8)
                             .padding(.horizontal, 12)
@@ -51,23 +43,10 @@ struct MessageView: View {
                                 .padding(.vertical, 8)
                         }
                     }
-                    .transaction { transaction in
-                        // 只对显示/隐藏使用动画
-                        if transaction.animation != nil {
-                            transaction.animation = .easeInOut(duration: 0.2)
-                        }
-                    }
                 }
                 
                 // 主要内容
-                if message.status == .streaming {
-                    TypewriterText(text: message.content)
-                        .transaction { transaction in
-                            transaction.animation = .none  // 禁用隐式动画
-                        }
-                } else {
-                    MessageContentView(content: message.content)
-                }
+                TypewriterText(text: message.content)
             }
             .padding()
             .background(
@@ -124,9 +103,10 @@ struct MessageContentView: View {
 // 打字机效果视图
 struct TypewriterText: View {
     let text: String
+    @State private var displayedText = ""
     
     var body: some View {
-        Markdown(text)
+        Markdown(displayedText)
             .textSelection(.enabled)
             .markdownTheme(
                 .gitHub.text {
@@ -143,11 +123,12 @@ struct TypewriterText: View {
                     ForegroundColor(.blue)
                 }
             )
-            .transaction { transaction in
-                // 只在文本变化时使用短暂的动画
-                if transaction.animation != nil {
-                    transaction.animation = .easeOut(duration: 0.1)
-                }
+            .onChange(of: text) { newText in
+                // 直接更新显示的文本，因为内容本身就是流式的
+                displayedText = newText
+            }
+            .onAppear {
+                displayedText = text
             }
     }
 }
