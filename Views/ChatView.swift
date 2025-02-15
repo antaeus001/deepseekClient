@@ -169,6 +169,14 @@ struct ChatView: View {
         .sheet(isPresented: $showSettingsSheet) {
             NavigationStack {
                 SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("完成") {
+                                showSettingsSheet = false
+                            }
+                        }
+                    }
+                    .navigationBarTitleDisplayMode(.inline)
             }
         }
     }
