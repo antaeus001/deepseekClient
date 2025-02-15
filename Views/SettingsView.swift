@@ -13,7 +13,7 @@ struct SettingsView: View {
     
     var body: some View {
         Form {
-            Section("API 配置") {
+            Section {
                 TextField("API 端点", text: $settings.apiEndpoint)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -27,6 +27,16 @@ struct SettingsView: View {
                     .onChange(of: settings.apiKey) { _ in
                         deepSeekService.updateSettings(value: settings)
                     }
+            } header: {
+                Text("API 配置")
+            } footer: {
+                HStack {
+                    Spacer()
+                    NavigationLink("查看配置帮助") {
+                        APIHelpView()
+                    }
+                    .font(.footnote)
+                }
             }
             
             Section("模型配置") {

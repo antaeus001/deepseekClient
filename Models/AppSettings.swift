@@ -7,7 +7,7 @@ struct AppSettings: Codable {
     var reasonerModel: String  // 推理模型
     
     static let `default` = AppSettings(
-        apiEndpoint: "https://api.deepseek.com",
+        apiEndpoint: "https://dashscope.aliyuncs.com/compatible-mode",
         apiKey: "",
         chatModel: "deepseek-chat",
         reasonerModel: "deepseek-reasoner"
