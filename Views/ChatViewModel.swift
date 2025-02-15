@@ -77,114 +77,85 @@ class ChatViewModel: ObservableObject {
                 messages[index].status = .success
             }
             
-            // 更新会话时间
-            let updatedChat = Chat(
-                id: currentChat.id,
-                title: chatTitle,
-                createdAt: currentChat.createdAt,
-                updatedAt: Date(),
-                messages: messages
-            )
-            try databaseService.saveChat(updatedChat)
-            self.chat = updatedChat
-        } catch {
-            print("Error saving user message: \(error)")
-            if let index = messages.firstIndex(where: { $0.id == newMessage.id }) {
-                messages[index].status = .failed
-            }
-            return
-        }
-        
-        do {
+            // 创建一个空的 AI 响应消息，用于显示加载动画
             let responseMessage = Message(
                 id: UUID().uuidString,
                 content: "",
-                reasoningContent: "",
+                reasoningContent: nil,
                 role: .assistant,
                 timestamp: Date(),
                 status: .streaming
             )
             messages.append(responseMessage)
             
-            var accumulatedContent = ""
-            var accumulatedReasoning = ""
-            let stream = try await deepSeekService.sendMessage(content, chatId: currentChat.id)
-            
-            print("🔄 开始接收流式响应...")
-            
-            for try await (text, reasoning) in stream {
-                // 打印每次接收到的内容
-                if !text.isEmpty {
-                    print("📝 收到内容: \(text)")
-                    accumulatedContent += text
+            do {
+                var accumulatedContent = ""
+                var accumulatedReasoning = ""
+                let stream = try await deepSeekService.sendMessage(content, chatId: currentChat.id)
+                
+                for try await (text, reasoning) in stream {
+                    if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
+                        // 使用 Task 来避免过于频繁的 UI 更新
+                        await Task { @MainActor in
+                            if !text.isEmpty {
+                                accumulatedContent += text
+                            }
+                            if let reasoning = reasoning {
+                                accumulatedReasoning = reasoning
+                            }
+                            
+                            messages[index] = Message(
+                                id: responseMessage.id,
+                                content: accumulatedContent,
+                                reasoningContent: accumulatedReasoning.isEmpty ? nil : accumulatedReasoning,
+                                role: .assistant,
+                                timestamp: responseMessage.timestamp,
+                                status: .streaming
+                            )
+                        }.value
+                    }
                 }
                 
-                if let reasoning = reasoning {
-                    print("🤔 收到推理: \(reasoning)")
-                    // 直接使用新的推理内容
-                    accumulatedReasoning = reasoning
-                }
+                // 流式输出完成后，保存最终消息
+                let finalResponseMessage = Message(
+                    id: responseMessage.id,
+                    content: accumulatedContent,
+                    reasoningContent: accumulatedReasoning.isEmpty ? nil : accumulatedReasoning,
+                    role: .assistant,
+                    timestamp: responseMessage.timestamp,
+                    status: .success
+                )
                 
-                // 打印当前累积的内容
-                print("📄 当前内容: \(accumulatedContent)")
-                print("💭 当前推理: \(accumulatedReasoning)")
+                // 保存 AI 响应到数据库
+                try databaseService.saveMessage(value: finalResponseMessage, chatId: currentChat.id)
                 
+                // 更新消息列表中的最后一条消息
                 if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
-                    // 使用 Task 来避免过于频繁的 UI 更新
-                    await Task { @MainActor in
-                        messages[index] = Message(
-                            id: responseMessage.id,
-                            content: accumulatedContent,
-                            reasoningContent: accumulatedReasoning.isEmpty ? nil : accumulatedReasoning,
-                            role: .assistant,
-                            timestamp: responseMessage.timestamp,
-                            status: .streaming
-                        )
-                    }.value
+                    messages[index] = finalResponseMessage
                 }
                 
-                // 添加小延迟以避免过于频繁的更新
-                try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+                // 更新会话
+                let updatedChat = Chat(
+                    id: currentChat.id,
+                    title: chatTitle,
+                    createdAt: currentChat.createdAt,
+                    updatedAt: Date(),
+                    messages: messages
+                )
+                try databaseService.saveChat(updatedChat)
+                self.chat = updatedChat
+                
+            } catch {
+                if let index = messages.lastIndex(where: { $0.role == .assistant }) {
+                    messages[index].status = .failed
+                }
             }
-            
-            print("✅ 流式响应接收完成")
-            print("📝 最终内容: \(accumulatedContent)")
-            print("🤔 最终推理: \(accumulatedReasoning)")
-            
-            // 流式输出完成后，保存最终消息
-            let finalResponseMessage = Message(
-                id: responseMessage.id,
-                content: accumulatedContent,
-                reasoningContent: accumulatedReasoning.isEmpty ? nil : accumulatedReasoning,
-                role: .assistant,
-                timestamp: responseMessage.timestamp,
-                status: .success
-            )
-            
-            // 保存 AI 响应到数据库
-            try databaseService.saveMessage(value: finalResponseMessage, chatId: currentChat.id)
-            
-            // 更新消息列表中的最后一条消息
-            if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
-                messages[index] = finalResponseMessage
-            }
-            
-            // 更新会话
-            let updatedChat = Chat(
-                id: currentChat.id,
-                title: chatTitle,
-                createdAt: currentChat.createdAt,
-                updatedAt: Date(),
-                messages: messages
-            )
-            try databaseService.saveChat(updatedChat)
-            self.chat = updatedChat
             
         } catch {
-            print("❌ 流式响应出错: \(error)")
-            if let index = messages.lastIndex(where: { $0.role == .assistant }) {
+            if let index = messages.firstIndex(where: { $0.id == newMessage.id }) {
                 messages[index].status = .failed
             }
+            return
         }
     }
     

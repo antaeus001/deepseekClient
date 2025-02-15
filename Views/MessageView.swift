@@ -23,30 +23,42 @@ struct MessageView: View {
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
                 if message.role == .assistant {
                     Group {
-                        if let reasoning = message.reasoningContent,
-                           !reasoning.isEmpty {
-                            // 推理内容
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("推理过程：")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.gray)
-                                
-                                TypewriterText(text: reasoning)
-                                    .foregroundColor(.gray)
-                            }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 12)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(8)
-                            
-                            Divider()
+                        if message.status == .streaming && message.content.isEmpty && message.reasoningContent == nil {
+                            // 只在开始流式传输但还没有内容时显示 LoadingView
+                            LoadingView()
                                 .padding(.vertical, 8)
+                        } else {
+                            if let reasoning = message.reasoningContent {
+                                // 推理内容
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("推理过程：")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.gray)
+                                    
+                                    TypewriterText(text: reasoning)
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(8)
+                                
+                                if !reasoning.isEmpty {
+                                    Divider()
+                                        .padding(.vertical, 8)
+                                }
+                            }
+                            
+                            // 主要内容
+                            if !message.content.isEmpty {
+                                TypewriterText(text: message.content)
+                            }
                         }
                     }
+                } else {
+                    // 用户消息直接显示内容
+                    TypewriterText(text: message.content)
                 }
-                
-                // 主要内容
-                TypewriterText(text: message.content)
             }
             .padding()
             .background(

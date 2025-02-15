@@ -86,6 +86,7 @@ private class StreamDelegate: NSObject, URLSessionDataDelegate {
     private var reasoningContent = ""
     private var isReasoning = false
     private var hasReasoningFlag = false
+    private var hasStartedStreaming = false
     
     init(continuation: AsyncThrowingStream<(String, String?), Error>.Continuation) {
         self.continuation = continuation
@@ -99,30 +100,19 @@ private class StreamDelegate: NSObject, URLSessionDataDelegate {
             return
         }
         
-        print("📥 收到原始数据: \(text)")  // 打印原始响应数据
-        
         let lines = (buffer + text).components(separatedBy: "\n")
         buffer = lines.last ?? ""
         
         for line in lines.dropLast() {
-            if line.isEmpty { 
-                print("⏭️ 跳过空行")
-                continue 
-            }
-            if !line.hasPrefix("data: ") { 
-                print("⚠️ 非数据行: \(line)")
-                continue 
-            }
+            if line.isEmpty { continue }
+            if !line.hasPrefix("data: ") { continue }
             
             let data = String(line.dropFirst(6))
             if data == "[DONE]" {
-                print("✅ 流式响应完成")
                 isCompleted = true
                 continuation.finish()
                 return
             }
-            
-            print("🔍 解析数据行: \(data)")
             
             if let jsonData = data.data(using: .utf8),
                let response = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
@@ -130,35 +120,31 @@ private class StreamDelegate: NSObject, URLSessionDataDelegate {
                let choice = choices.first,
                let delta = choice["delta"] as? [String: Any] {
                 
-                print("🔄 解析成功: \(delta)")
-                
                 var content = ""
                 var shouldYield = false
                 
                 if let reasoningFlag = delta["reasoning_flag"] as? Bool {
                     isReasoning = reasoningFlag
                     hasReasoningFlag = true
-                    print("🚩 推理标志变更: \(isReasoning)")
                 }
                 
                 if let reasoningContent = delta["reasoning_content"] as? String {
                     self.reasoningContent += reasoningContent
-                    print("💭 推理内容更新: \(self.reasoningContent)")
-                    shouldYield = true  // 有推理内容更新时也要触发
+                    shouldYield = true
                 }
                 
                 if let deltaContent = delta["content"] as? String {
                     content = deltaContent
-                    print("📝 内容更新: \(content)")
                     shouldYield = true
                 }
                 
                 if shouldYield {
-                    // 只要有任何更新就发送
+                    if !hasStartedStreaming {
+                        hasStartedStreaming = true
+                        continuation.yield(("", nil))
+                    }
                     continuation.yield((content, self.reasoningContent))
                 }
-            } else {
-                print("❌ JSON 解析失败: \(data)")
             }
         }
     }
