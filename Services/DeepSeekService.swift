@@ -26,20 +26,23 @@ class DeepSeekService {
     
     func sendMessage(_ content: String, chatId: String) async throws -> AsyncThrowingStream<(String, String?), Error> {
         let messages = [
+            // OpenAI 标准消息格式
             ["role": "user", "content": content]
         ]
         
         let parameters: [String: Any] = [
             "model": currentModel,
             "messages": messages,
-            "stream": true
+            "stream": true,
+            // OpenAI 标准参数
+            "temperature": 0.7,
+            "max_tokens": 2000,
+            "top_p": 1.0,
+            "frequency_penalty": 0,
+            "presence_penalty": 0
         ]
         
-        // 打印请求内容
-        if let jsonData = try? JSONSerialization.data(withJSONObject: parameters, options: .prettyPrinted),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            print("📤 发送请求: \(jsonString)")
-        }
+        print("📤 发送请求: \(parameters)")
         
         guard let url = URL(string: "\(settings.apiEndpoint)/v1/chat/completions") else {
             print("❌ 无效的 URL: \(settings.apiEndpoint)/v1/chat/completions")
@@ -54,6 +57,11 @@ class DeepSeekService {
         
         print("🌐 API 端点: \(settings.apiEndpoint)")
         print("🔑 API Key: \(settings.apiKey.prefix(8))...")
+        
+        // 添加调试信息
+        if let body = String(data: request.httpBody!, encoding: .utf8) {
+            print("📦 请求体: \(body)")
+        }
         
         return AsyncThrowingStream { continuation in
             let delegate = StreamDelegate(continuation: continuation)
@@ -91,7 +99,7 @@ private class StreamDelegate: NSObject, URLSessionDataDelegate {
             return
         }
         
-        print("📥 收到原始数据: \(text)")
+        print("📥 收到原始数据: \(text)")  // 打印原始响应数据
         
         let lines = (buffer + text).components(separatedBy: "\n")
         buffer = lines.last ?? ""
