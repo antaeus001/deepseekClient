@@ -54,11 +54,11 @@ struct ChatView: View {
                     scrollToBottom()
                 }
                 .onChange(of: viewModel.messages.last?.content) { _ in
-                    // 只有当最后一条消息可见时才自动滚动
-                    if let lastMessage = viewModel.messages.last,
-                       visibleMessageIds.contains(lastMessage.id) {
-                        scrollToBottom()
-                    }
+                    scrollToBottom()
+                }
+                .onChange(of: viewModel.messages.last?.reasoningContent) { _ in
+                    // 当推理内容更新时也滚动到底部
+                    scrollToBottom()
                 }
             }
             
@@ -126,12 +126,26 @@ struct ChatView: View {
     
     private func scrollToBottom(animated: Bool = true) {
         guard let lastMessage = viewModel.messages.last else { return }
-        if animated {
-            withAnimation(.easeOut(duration: 0.3)) {
+        
+        // 如果最后一条消息是 AI 回复且正在流式输出，总是滚动
+        if lastMessage.role == .assistant && lastMessage.status == .streaming {
+            if animated {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+                }
+            } else {
                 scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
             }
-        } else {
-            scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+        }
+        // 否则只在最后一条消息可见时滚动
+        else if visibleMessageIds.contains(lastMessage.id) {
+            if animated {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+                }
+            } else {
+                scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+            }
         }
     }
     
