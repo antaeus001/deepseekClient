@@ -4,20 +4,18 @@ class DeepSeekService {
     static let shared = DeepSeekService()
     var settings: AppSettings
     private var currentModel: String
+    private var isDeepThinking = false  // 默认为 false
     
     private init() {
         self.settings = UserDefaults.standard.getValue(AppSettings.self, forKey: "appSettings") ?? AppSettings.default
-        self.currentModel = settings.chatModel
+        self.currentModel = settings.chatModel  // 默认使用会话模型
     }
     
     func updateSettings(value newSettings: AppSettings) {
         self.settings = newSettings
         UserDefaults.standard.setValue(newSettings, forKey: "appSettings")
-        // 根据当前模式更新模型
         self.currentModel = isDeepThinking ? settings.reasonerModel : settings.chatModel
     }
-    
-    private var isDeepThinking = false
     
     func setModel(_ isReasoner: Bool) {
         isDeepThinking = isReasoner

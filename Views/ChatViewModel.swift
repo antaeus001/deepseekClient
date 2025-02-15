@@ -9,7 +9,7 @@ class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var chatTitle: String = "新会话"
     @Published private(set) var chat: Chat?
-    @Published var isDeepThinking = false
+    @Published var isDeepThinking = false  // 默认为 false
     @Published var showSettings = false
     
     private let deepSeekService = DeepSeekService.shared
@@ -21,12 +21,14 @@ class ChatViewModel: ObservableObject {
             self.messages = chat.messages
             self.chatTitle = chat.title
         }
+        // 确保初始化时使用会话模型
+        deepSeekService.setModel(false)
     }
     
     func toggleDeepThinking(_ isEnabled: Bool) {
         withAnimation(.spring(duration: 0.3)) {
             isDeepThinking = isEnabled
-            deepSeekService.setModel(isEnabled)  // 直接传递 Bool 值
+            deepSeekService.setModel(isEnabled)
         }
     }
     
