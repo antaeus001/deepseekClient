@@ -3,7 +3,6 @@ import MarkdownUI
 
 struct MessageView: View {
     let message: Message
-    @State private var displayedReasoning: String?
     
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -18,16 +17,10 @@ struct MessageView: View {
                             .font(.system(size: 16))
                     )
             } else {
-                Spacer(minLength: 32)  // 用户消息时左侧占位
+                Spacer(minLength: 32)
             }
             
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                // 时间显示
-                Text(formatTime(message.timestamp))
-                    .font(.system(size: 12))
-                    .foregroundColor(message.role == .user ? .white.opacity(0.6) : .gray)
-                    .padding(.bottom, 2)
-                
+            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
                 if message.role == .assistant {
                     Group {
                         if let reasoning = message.reasoningContent,
@@ -38,10 +31,16 @@ struct MessageView: View {
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(.gray)
                                 
-                                Text(reasoning)
-                                    .font(.system(.body))
-                                    .foregroundColor(.gray)
-                                    .id(reasoning)
+                                if message.status == .streaming {
+                                    TypewriterText(text: reasoning)
+                                        .foregroundColor(.gray)
+                                        .transaction { transaction in
+                                            transaction.animation = .none  // 禁用隐式动画
+                                        }
+                                } else {
+                                    MessageContentView(content: reasoning)
+                                        .foregroundColor(.gray)
+                                }
                             }
                             .padding(.vertical, 8)
                             .padding(.horizontal, 12)
@@ -52,12 +51,23 @@ struct MessageView: View {
                                 .padding(.vertical, 8)
                         }
                     }
-                    .animation(.easeInOut, value: message.reasoningContent)
+                    .transaction { transaction in
+                        // 只对显示/隐藏使用动画
+                        if transaction.animation != nil {
+                            transaction.animation = .easeInOut(duration: 0.2)
+                        }
+                    }
                 }
                 
                 // 主要内容
-                MessageContentView(content: message.content)
-                    .textSelection(.enabled)
+                if message.status == .streaming {
+                    TypewriterText(text: message.content)
+                        .transaction { transaction in
+                            transaction.animation = .none  // 禁用隐式动画
+                        }
+                } else {
+                    MessageContentView(content: message.content)
+                }
             }
             .padding()
             .background(
@@ -78,32 +88,10 @@ struct MessageView: View {
                             .font(.system(size: 16))
                     )
             } else {
-                Spacer(minLength: 32)  // AI 消息时右侧占位
+                Spacer(minLength: 32)
             }
         }
         .padding(.horizontal)
-    }
-    
-    private func formatTime(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let now = Date()
-        
-        if calendar.isDateInToday(date) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            return formatter.string(from: date)
-        } else if calendar.isDateInYesterday(date) {
-            return "昨天"
-        } else if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEEE"
-            formatter.locale = Locale(identifier: "zh_CN")
-            return formatter.string(from: date)
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MM-dd"
-            return formatter.string(from: date)
-        }
     }
 }
 
@@ -155,7 +143,11 @@ struct TypewriterText: View {
                     ForegroundColor(.blue)
                 }
             )
-            .animation(.easeOut(duration: 0.1), value: text)
-            .transition(.opacity)
+            .transaction { transaction in
+                // 只在文本变化时使用短暂的动画
+                if transaction.animation != nil {
+                    transaction.animation = .easeOut(duration: 0.1)
+                }
+            }
     }
 }

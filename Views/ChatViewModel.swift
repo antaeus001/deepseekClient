@@ -99,7 +99,7 @@ class ChatViewModel: ObservableObject {
             let responseMessage = Message(
                 id: UUID().uuidString,
                 content: "",
-                reasoningContent: "",  // 初始化为空字符串
+                reasoningContent: "",
                 role: .assistant,
                 timestamp: Date(),
                 status: .streaming
@@ -113,8 +113,11 @@ class ChatViewModel: ObservableObject {
             for try await (text, reasoning) in stream {
                 accumulatedContent += text
                 if let reasoning = reasoning {
-                    accumulatedReasoning = reasoning
-                    print("Updating message with reasoning: \(reasoning)")  // 添加调试日志
+                    // 只在推理内容发生变化时才更新
+                    if reasoning != accumulatedReasoning {
+                        accumulatedReasoning = reasoning
+                        print("Updating message with reasoning: \(reasoning)")
+                    }
                 }
                 
                 if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
