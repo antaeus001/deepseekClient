@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0'>
+    <title>DeepSeek API 配置帮助</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.5;
+            padding: 16px;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            background: #f5f5f5;
+        }
+        .section {
+            margin-bottom: 24px;
+            background: #fff;
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-top: 0;
+            color: #000;
+            font-size: 1.2em;
+        }
+        .api-item {
+            margin: 8px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #007AFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            margin-top: 8px;
+        }
+        .code {
+            background: #f5f5f5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="section">
+        <h2>阿里云配置</h2>
+        <div class="api-item">API 端点：<span class="code">https://dashscope.aliyuncs.com/compatible-mode</span></div>
+        <div class="api-item">会话模型：<span class="code">deepseek-v3</span></div>
+        <div class="api-item">推理模型：<span class="code">deepseek-r1</span></div>
+        <a href="https://bailian.console.aliyun.com/detail/deepseek-r1#/model-market/detail/deepseek-r1" class="button">申请 API Key</a>
+    </div>
+    
+    <div class="section">
+        <h2>DeepSeek 官方配置</h2>
+        <div class="api-item">API 端点：<span class="code">https://api.deepseek.com</span></div>
+        <div class="api-item">会话模型：<span class="code">deepseek-chat</span></div>
+        <div class="api-item">推理模型：<span class="code">deepseek-reasoner</span></div>
+        <a href="https://platform.deepseek.com/api_keys" class="button">申请 API Key</a>
+    </div>
+</body>
+</html> 

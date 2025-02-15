@@ -32,10 +32,8 @@ struct SettingsView: View {
             } footer: {
                 HStack {
                     Spacer()
-                    NavigationLink("查看配置帮助") {
-                        APIHelpView()
-                    }
-                    .font(.footnote)
+                    Link("查看配置帮助", destination: URL(string: "https://www.huohuaai.com/api_help.html")!)
+                        .font(.footnote)
                 }
             }
             
