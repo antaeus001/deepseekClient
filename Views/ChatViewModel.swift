@@ -10,6 +10,7 @@ class ChatViewModel: ObservableObject {
     @Published var chatTitle: String = "新会话"
     @Published private(set) var chat: Chat?
     @Published var isDeepThinking = false
+    @Published var showSettings = false
     
     private let deepSeekService = DeepSeekService.shared
     private let databaseService = DatabaseService.shared
@@ -191,6 +192,14 @@ class ChatViewModel: ObservableObject {
         messages.contains { message in 
             message.role == .assistant && message.status == .success
         }
+    }
+    
+    var isConfigValid: Bool {
+        let settings = deepSeekService.settings
+        return !settings.apiEndpoint.isEmpty && 
+               !settings.apiKey.isEmpty && 
+               !settings.chatModel.isEmpty && 
+               !settings.reasonerModel.isEmpty
     }
 }
 

@@ -12,6 +12,7 @@ struct ChatView: View {
     
     // 用于缓存视图的状态
     @State private var visibleMessageIds = Set<String>()
+    @State private var showSettingsSheet = false  // 添加这一行
     
     init(chat: Chat? = nil, isNewChat: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
@@ -22,24 +23,67 @@ struct ChatView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // 聊天记录
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 20) {
-                        ForEach(viewModel.messages) { message in
-                            MessageView(message: message)
-                                .id(message.id)
-                                .transition(.opacity)
-                                // 使用 onAppear 和 onDisappear 跟踪可见消息
-                                .onAppear {
-                                    visibleMessageIds.insert(message.id)
+                    if viewModel.messages.isEmpty {
+                        VStack(spacing: 16) {
+                            Image(systemName: "message")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray)
+                                .padding(.top, 60)
+                            
+                            Text("开始新的对话")
+                                .font(.headline)
+                                .foregroundColor(.gray)
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("你可以：")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                
+                                HStack {
+                                    Image(systemName: "brain")
+                                    Text("开启深度思考模式获得更详细的推理过程")
                                 }
-                                .onDisappear {
-                                    visibleMessageIds.remove(message.id)
+                                .foregroundColor(.gray)
+                                
+                                HStack {
+                                    Image(systemName: "gear")
+                                    Text("在设置中配置 API 信息")
                                 }
+                                .foregroundColor(.gray)
+                                
+                                HStack {
+                                    Image(systemName: "questionmark.circle")
+                                    Text("输入任何问题开始对话")
+                                }
+                                .foregroundColor(.gray)
+                            }
+                            .font(.footnote)
+                            .padding()
+                            .background(Color(.systemBackground))
+                            .cornerRadius(10)
+                            .shadow(color: Color.black.opacity(0.05), radius: 5)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                    } else {
+                        LazyVStack(spacing: 20) {
+                            ForEach(viewModel.messages) { message in
+                                MessageView(message: message)
+                                    .id(message.id)
+                                    .transition(.opacity)
+                                    // 使用 onAppear 和 onDisappear 跟踪可见消息
+                                    .onAppear {
+                                        visibleMessageIds.insert(message.id)
+                                    }
+                                    .onDisappear {
+                                        visibleMessageIds.remove(message.id)
+                                    }
+                            }
+                        }
+                        .padding(.vertical, 20)
                     }
-                    .padding(.vertical, 20)
                 }
                 .background(Color(.systemGroupedBackground))
                 // 使用 ScrollView 的性能优化选项
@@ -122,6 +166,11 @@ struct ChatView: View {
                     .font(.headline)
             }
         }
+        .sheet(isPresented: $showSettingsSheet) {
+            NavigationStack {
+                SettingsView()
+            }
+        }
     }
     
     private func scrollToBottom(animated: Bool = true) {
@@ -152,6 +201,12 @@ struct ChatView: View {
     private func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        
+        // 检查配置
+        if !viewModel.isConfigValid {
+            showSettingsSheet = true
+            return
+        }
         
         Task {
             if isNewChat {
