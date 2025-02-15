@@ -32,10 +32,11 @@ class DeepSeekService {
         // 打印请求内容
         if let jsonData = try? JSONSerialization.data(withJSONObject: parameters, options: .prettyPrinted),
            let jsonString = String(data: jsonData, encoding: .utf8) {
-            print("Request body: \(jsonString)")
+            print("📤 发送请求: \(jsonString)")
         }
         
         guard let url = URL(string: "\(settings.apiEndpoint)/v1/chat/completions") else {
+            print("❌ 无效的 URL: \(settings.apiEndpoint)/v1/chat/completions")
             throw URLError(.badURL)
         }
         
@@ -45,6 +46,9 @@ class DeepSeekService {
         request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         
+        print("🌐 API 端点: \(settings.apiEndpoint)")
+        print("🔑 API Key: \(settings.apiKey.prefix(8))...")
+        
         return AsyncThrowingStream { continuation in
             let delegate = StreamDelegate(continuation: continuation)
             let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
@@ -53,6 +57,7 @@ class DeepSeekService {
             task.resume()
             
             continuation.onTermination = { _ in
+                print("🛑 流式请求被终止")
                 task.cancel()
                 session.invalidateAndCancel()
             }
@@ -74,22 +79,36 @@ private class StreamDelegate: NSObject, URLSessionDataDelegate {
     }
     
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard !isCompleted, let text = String(data: data, encoding: .utf8) else { return }
+        guard !isCompleted else { return }
+        guard let text = String(data: data, encoding: .utf8) else {
+            print("❌ 无法解码接收到的数据")
+            return
+        }
+        
+        print("📥 收到原始数据: \(text)")
         
         let lines = (buffer + text).components(separatedBy: "\n")
         buffer = lines.last ?? ""
         
         for line in lines.dropLast() {
-            if line.isEmpty { continue }
-            if !line.hasPrefix("data: ") { continue }
+            if line.isEmpty { 
+                print("⏭️ 跳过空行")
+                continue 
+            }
+            if !line.hasPrefix("data: ") { 
+                print("⚠️ 非数据行: \(line)")
+                continue 
+            }
             
             let data = String(line.dropFirst(6))
             if data == "[DONE]" {
-                print("✅ Stream completed")
+                print("✅ 流式响应完成")
                 isCompleted = true
                 continuation.finish()
                 return
             }
+            
+            print("🔍 解析数据行: \(data)")
             
             if let jsonData = data.data(using: .utf8),
                let response = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
@@ -97,32 +116,48 @@ private class StreamDelegate: NSObject, URLSessionDataDelegate {
                let choice = choices.first,
                let delta = choice["delta"] as? [String: Any] {
                 
-                // 处理推理标志
+                print("🔄 解析成功: \(delta)")
+                
+                var content = ""
+                var shouldYield = false
+                
                 if let reasoningFlag = delta["reasoning_flag"] as? Bool {
                     isReasoning = reasoningFlag
                     hasReasoningFlag = true
+                    print("🚩 推理标志变更: \(isReasoning)")
                 }
                 
-                // 处理推理内容
                 if let reasoningContent = delta["reasoning_content"] as? String {
                     self.reasoningContent += reasoningContent
+                    print("💭 推理内容更新: \(self.reasoningContent)")
+                    shouldYield = true  // 有推理内容更新时也要触发
                 }
                 
-                // 处理主要内容
-                if let content = delta["content"] as? String {
+                if let deltaContent = delta["content"] as? String {
+                    content = deltaContent
+                    print("📝 内容更新: \(content)")
+                    shouldYield = true
+                }
+                
+                if shouldYield {
+                    // 只要有任何更新就发送
                     continuation.yield((content, self.reasoningContent))
                 }
+            } else {
+                print("❌ JSON 解析失败: \(data)")
             }
         }
     }
     
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        // 只有在未完成且有错误时才处理
         if !isCompleted {
             if let error = error {
-                print("❌ Stream error: \(error)")
+                print("❌ 流式响应错误: \(error)")
+                continuation.finish(throwing: error)
+            } else {
+                print("✅ 流式响应正常完成")
+                continuation.finish()
             }
-            continuation.finish()
         }
     }
     

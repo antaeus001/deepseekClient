@@ -95,11 +95,10 @@ class ChatViewModel: ObservableObject {
         }
         
         do {
-            // 创建 AI 响应消息
             let responseMessage = Message(
                 id: UUID().uuidString,
                 content: "",
-                reasoningContent: "",  // 初始化为空字符串
+                reasoningContent: "",
                 role: .assistant,
                 timestamp: Date(),
                 status: .streaming
@@ -108,29 +107,48 @@ class ChatViewModel: ObservableObject {
             
             var accumulatedContent = ""
             var accumulatedReasoning = ""
-            var currentReasoning = ""  // 用于累积当前的推理内容
             let stream = try await deepSeekService.sendMessage(content, chatId: currentChat.id)
             
+            print("🔄 开始接收流式响应...")
+            
             for try await (text, reasoning) in stream {
-                accumulatedContent += text
+                // 打印每次接收到的内容
+                if !text.isEmpty {
+                    print("📝 收到内容: \(text)")
+                    accumulatedContent += text
+                }
                 
                 if let reasoning = reasoning {
-                    // 如果收到新的推理内容，立即更新
-                    currentReasoning = reasoning
-                    accumulatedReasoning = currentReasoning
+                    print("🤔 收到推理: \(reasoning)")
+                    // 直接使用新的推理内容
+                    accumulatedReasoning = reasoning
                 }
                 
+                // 打印当前累积的内容
+                print("📄 当前内容: \(accumulatedContent)")
+                print("💭 当前推理: \(accumulatedReasoning)")
+                
                 if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {
-                    messages[index] = Message(
-                        id: responseMessage.id,
-                        content: accumulatedContent,
-                        reasoningContent: accumulatedReasoning.isEmpty ? nil : accumulatedReasoning,
-                        role: .assistant,
-                        timestamp: responseMessage.timestamp,
-                        status: .streaming
-                    )
+                    // 使用 Task 来避免过于频繁的 UI 更新
+                    await Task { @MainActor in
+                        messages[index] = Message(
+                            id: responseMessage.id,
+                            content: accumulatedContent,
+                            reasoningContent: accumulatedReasoning.isEmpty ? nil : accumulatedReasoning,
+                            role: .assistant,
+                            timestamp: responseMessage.timestamp,
+                            status: .streaming
+                        )
+                    }.value
                 }
+                
+                // 添加小延迟以避免过于频繁的更新
+                try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
             }
+            
+            print("✅ 流式响应接收完成")
+            print("📝 最终内容: \(accumulatedContent)")
+            print("🤔 最终推理: \(accumulatedReasoning)")
             
             // 流式输出完成后，保存最终消息
             let finalResponseMessage = Message(
@@ -141,10 +159,6 @@ class ChatViewModel: ObservableObject {
                 timestamp: responseMessage.timestamp,
                 status: .success
             )
-            
-            // 打印调试信息
-            print("Final message content: \(accumulatedContent)")
-            print("Final reasoning content: \(accumulatedReasoning)")
             
             // 保存 AI 响应到数据库
             try databaseService.saveMessage(value: finalResponseMessage, chatId: currentChat.id)
@@ -166,7 +180,7 @@ class ChatViewModel: ObservableObject {
             self.chat = updatedChat
             
         } catch {
-            print("Error getting AI response: \(error)")
+            print("❌ 流式响应出错: \(error)")
             if let index = messages.lastIndex(where: { $0.role == .assistant }) {
                 messages[index].status = .failed
             }
