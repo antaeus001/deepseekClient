@@ -183,48 +183,17 @@ struct ChatRow: View {
                         .lineLimit(2)
                 }
                 
-                Text(formatDate(chat.updatedAt))
+                Text(chat.updatedAt.timeAgoDisplay())
                     .font(.caption)
                     .foregroundColor(.gray)
             }
             
             Spacer()
             
-            // 添加箭头图标
             Image(systemName: "chevron.right")
                 .font(.system(size: 14))
                 .foregroundColor(.gray)
         }
         .padding(.vertical, 8)
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        formatter.locale = Locale(identifier: "zh_CN")
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
-}
-
-// 添加时间显示扩展
-extension Date {
-    func timeAgoDisplay() -> String {
-        let calendar = Calendar.current
-        let now = Date()
-        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: self, to: now)
-        
-        if let year = components.year, year > 0 {
-            return "\(year)年前"
-        } else if let month = components.month, month > 0 {
-            return "\(month)月前"
-        } else if let day = components.day, day > 0 {
-            return "\(day)天前"
-        } else if let hour = components.hour, hour > 0 {
-            return "\(hour)小时前"
-        } else if let minute = components.minute, minute > 0 {
-            return "\(minute)分钟前"
-        } else {
-            return "刚刚"
-        }
     }
 } 
