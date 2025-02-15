@@ -23,9 +23,9 @@ class ChatViewModel: ObservableObject {
     }
     
     func toggleDeepThinking(_ isEnabled: Bool) {
-        withAnimation(.spring(duration: 0.3)) {  // 添加动画
+        withAnimation(.spring(duration: 0.3)) {
             isDeepThinking = isEnabled
-            deepSeekService.setModel(isEnabled ? "deepseek-reasoner" : "deepseek-chat")
+            deepSeekService.setModel(isEnabled)  // 直接传递 Bool 值
         }
     }
     

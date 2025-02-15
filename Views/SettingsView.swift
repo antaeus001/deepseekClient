@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var settings: AppSettings
+    private let deepSeekService = DeepSeekService.shared
     @State private var showPrivacyPolicy = false
     @State private var showUserAgreement = false
     
@@ -10,45 +12,53 @@ struct SettingsView: View {
     }
     
     var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    TextField("API 地址", text: $settings.apiEndpoint)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .onChange(of: settings.apiEndpoint) { _ in
-                            DeepSeekService.shared.updateSettings(value: settings)
-                        }
-                    
-                    SecureField("API Key", text: $settings.apiKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .onChange(of: settings.apiKey) { _ in
-                            DeepSeekService.shared.updateSettings(value: settings)
-                        }
-                } header: {
-                    Text("API 配置")
-                } footer: {
-                    Text("配置信息会自动保存")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+        Form {
+            Section("API 配置") {
+                TextField("API 端点", text: $settings.apiEndpoint)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: settings.apiEndpoint) { _ in
+                        deepSeekService.updateSettings(value: settings)
+                    }
+                
+                SecureField("API Key", text: $settings.apiKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: settings.apiKey) { _ in
+                        deepSeekService.updateSettings(value: settings)
+                    }
+            }
+            
+            Section("模型配置") {
+                TextField("对话模型", text: $settings.chatModel)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: settings.chatModel) { _ in
+                        deepSeekService.updateSettings(value: settings)
+                    }
+                
+                TextField("推理模型", text: $settings.reasonerModel)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: settings.reasonerModel) { _ in
+                        deepSeekService.updateSettings(value: settings)
+                    }
+            }
+            
+            Section {
+                Button("隐私政策") {
+                    showPrivacyPolicy = true
                 }
                 
-                Section {
-                    Button("隐私政策") {
-                        showPrivacyPolicy = true
-                    }
-                    
-                    Button("用户协议") {
-                        showUserAgreement = true
-                    }
-                } header: {
-                    Text("法律条款")
+                Button("用户协议") {
+                    showUserAgreement = true
                 }
+            } header: {
+                Text("法律条款")
             }
-            .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showPrivacyPolicy) {
             PrivacyPolicyView()
         }

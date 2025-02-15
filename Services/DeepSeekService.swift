@@ -3,19 +3,25 @@ import Foundation
 class DeepSeekService {
     static let shared = DeepSeekService()
     var settings: AppSettings
-    private var currentModel = "deepseek-chat"
+    private var currentModel: String
     
     private init() {
         self.settings = UserDefaults.standard.getValue(AppSettings.self, forKey: "appSettings") ?? AppSettings.default
+        self.currentModel = settings.chatModel
     }
     
     func updateSettings(value newSettings: AppSettings) {
         self.settings = newSettings
         UserDefaults.standard.setValue(newSettings, forKey: "appSettings")
+        // 根据当前模式更新模型
+        self.currentModel = isDeepThinking ? settings.reasonerModel : settings.chatModel
     }
     
-    func setModel(_ model: String) {
-        currentModel = model
+    private var isDeepThinking = false
+    
+    func setModel(_ isReasoner: Bool) {
+        isDeepThinking = isReasoner
+        currentModel = isReasoner ? settings.reasonerModel : settings.chatModel
     }
     
     func sendMessage(_ content: String, chatId: String) async throws -> AsyncThrowingStream<(String, String?), Error> {
