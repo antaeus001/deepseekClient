@@ -6,6 +6,7 @@ struct SettingsView: View {
     private let deepSeekService = DeepSeekService.shared
     @State private var showPrivacyPolicy = false
     @State private var showUserAgreement = false
+    @State private var showApiKey = false
     
     init() {
         _settings = State(initialValue: DeepSeekService.shared.settings)
@@ -21,12 +22,30 @@ struct SettingsView: View {
                         deepSeekService.updateSettings(value: settings)
                     }
                 
-                SecureField("API Key", text: $settings.apiKey)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .onChange(of: settings.apiKey) { _ in
-                        deepSeekService.updateSettings(value: settings)
+                HStack {
+                    if showApiKey {
+                        TextField("API Key", text: $settings.apiKey)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .onChange(of: settings.apiKey) { _ in
+                                deepSeekService.updateSettings(value: settings)
+                            }
+                    } else {
+                        SecureField("API Key", text: $settings.apiKey)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .onChange(of: settings.apiKey) { _ in
+                                deepSeekService.updateSettings(value: settings)
+                            }
                     }
+                    
+                    Button {
+                        showApiKey.toggle()
+                    } label: {
+                        Image(systemName: showApiKey ? "eye.slash.fill" : "eye.fill")
+                            .foregroundColor(.gray)
+                    }
+                }
             } header: {
                 Text("API 配置")
             } footer: {
