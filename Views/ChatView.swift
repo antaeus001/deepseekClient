@@ -3,6 +3,7 @@ import SwiftUI
 struct ChatView: View {
     let chat: Chat?  // 可选，因为新会话时为 nil
     let isNewChat: Bool
+    let resetTrigger: Bool  // 添加重置触发器
     let onChatCreated: ((Chat?) -> Void)?  // 回调
     @StateObject private var viewModel: ChatViewModel
     @Environment(\.dismiss) private var dismiss
@@ -14,11 +15,18 @@ struct ChatView: View {
     @State private var visibleMessageIds = Set<String>()
     @State private var showSettingsSheet = false  // 添加这一行
     
-    init(chat: Chat? = nil, isNewChat: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
+    init(chat: Chat? = nil, isNewChat: Bool = false, resetTrigger: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
         self.isNewChat = isNewChat
+        self.resetTrigger = resetTrigger
         self.onChatCreated = onChatCreated
-        _viewModel = StateObject(wrappedValue: ChatViewModel(chat: chat))
+        
+        let viewModel = ChatViewModel()
+        if let chat = chat {
+            print("初始化时加载会话: \(chat.title)")  // 添加日志
+            viewModel.loadChat(chat)
+        }
+        _viewModel = StateObject(wrappedValue: viewModel)
     }
     
     var body: some View {
@@ -93,6 +101,10 @@ struct ChatView: View {
                 .onAppear {
                     scrollProxy = proxy
                     scrollToBottom(animated: false)
+                    if let chat = chat {
+                        print("视图出现时加载会话: \(chat.title)")  // 添加日志
+                        viewModel.loadChat(chat)
+                    }
                 }
                 .onChange(of: viewModel.messages.count) { _ in
                     scrollToBottom()
@@ -179,6 +191,25 @@ struct ChatView: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
         }
+        .onChange(of: isNewChat) { newValue in
+            if newValue {
+                // 如果切换到新会话模式，重置 ViewModel
+                viewModel.reset()
+                inputText = ""
+            }
+        }
+        .onChange(of: chat) { newChat in
+            if let newChat = newChat {
+                print("会话变化时加载: \(newChat.title)")  // 添加日志
+                viewModel.loadChat(newChat)
+            }
+        }
+        .onChange(of: resetTrigger) { _ in
+            viewModel.reset()
+            inputText = ""
+            isInputFocused = false
+            visibleMessageIds.removeAll()
+        }
     }
     
     private func scrollToBottom(animated: Bool = true) {
@@ -217,10 +248,12 @@ struct ChatView: View {
         }
         
         Task {
-            if isNewChat {
+            // 只有在真正的新会话时才创建新会话
+            if isNewChat && viewModel.messages.isEmpty {
                 await viewModel.createAndSendFirstMessage(text)
                 onChatCreated?(viewModel.chat)
             } else {
+                // 否则继续在当前会话中发送消息
                 await viewModel.sendMessage(text)
             }
             inputText = ""

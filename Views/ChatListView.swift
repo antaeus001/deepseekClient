@@ -2,11 +2,11 @@ import SwiftUI
 
 struct ChatListView: View {
     @Binding var selectedChat: Chat?
+    @Environment(\.dismiss) private var dismiss
     @State private var chats: [Chat] = []
     @State private var showDeleteAlert = false
     @State private var chatToDelete: Chat?
     @State private var isLoading = true
-    @State private var showNewChat = false
     
     private let databaseService = DatabaseService.shared
     
@@ -20,9 +20,11 @@ struct ChatListView: View {
                 }
                 .listRowBackground(Color.clear)
             } else {
-                // 新建会话按钮
+                // 修改新建会话按钮
                 Button {
-                    showNewChat = true
+                    // 先清除选中的会话，这会触发 onChange 回调
+                    selectedChat = nil
+                    // 不需要在这里调用 dismiss，因为 onChange 会处理
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "plus.circle.fill")
@@ -45,7 +47,12 @@ struct ChatListView: View {
                             ChatRow(chat: chat)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    selectedChat = chat
+                                    // 先设置 selectedChat 为 nil 触发重置
+                                    selectedChat = nil
+                                    // 然后设置新的选中会话
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        selectedChat = chat
+                                    }
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
@@ -87,7 +94,8 @@ struct ChatListView: View {
                         .font(.headline)
                         .foregroundColor(.gray)
                     Button {
-                        showNewChat = true
+                        // 同样的逻辑
+                        selectedChat = nil
                     } label: {
                         Label("新建会话", systemImage: "plus")
                             .font(.headline)
@@ -107,17 +115,6 @@ struct ChatListView: View {
             }
         } message: { chat in
             Text("确定要删除「\(chat.title)」吗？此操作不可恢复。")
-        }
-        .navigationDestination(isPresented: $showNewChat) {
-            ChatView(isNewChat: true) { newChat in
-                if let chat = newChat {
-                    selectedChat = chat
-                    Task {
-                        await loadChats()
-                    }
-                }
-                showNewChat = false
-            }
         }
         .onAppear {
             Task {

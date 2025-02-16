@@ -15,14 +15,22 @@ class ChatViewModel: ObservableObject {
     private let deepSeekService = DeepSeekService.shared
     private let databaseService = DatabaseService.shared
     
-    init(chat: Chat? = nil) {
-        self.chat = chat
-        if let chat = chat {
-            self.messages = chat.messages
-            self.chatTitle = chat.title
-        }
-        // 确保初始化时使用会话模型
+    init() {
         deepSeekService.setModel(false)
+    }
+    
+    func loadChat(_ chat: Chat) {
+        self.chat = chat
+        self.messages = chat.messages
+        self.chatTitle = chat.title
+        print("加载会话: \(chat.title), 消息数: \(chat.messages.count)")  // 添加日志
+    }
+    
+    func reset() {
+        messages = []
+        chatTitle = "新会话"
+        chat = nil
+        isDeepThinking = false
     }
     
     func toggleDeepThinking(_ isEnabled: Bool) {
