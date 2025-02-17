@@ -20,28 +20,27 @@ struct ChatListView: View {
                 }
                 .listRowBackground(Color.clear)
             } else {
-                // 修改新建会话按钮
-                Button {
-                    // 先清除选中的会话，这会触发 onChange 回调
-                    selectedChat = nil
-                    // 不需要在这里调用 dismiss，因为 onChange 会处理
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                        Text("开始新对话")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(Color(.systemGroupedBackground))
-                
+                // 只在有历史会话时显示"开始新对话"按钮
                 if !chats.isEmpty {
+                    // 新建会话按钮
+                    Button {
+                        selectedChat = nil
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                            Text("开始新对话")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color(.systemGroupedBackground))
+                    
                     Section {
                         ForEach(chats) { chat in
                             ChatRow(chat: chat)
@@ -94,8 +93,10 @@ struct ChatListView: View {
                         .font(.headline)
                         .foregroundColor(.gray)
                     Button {
-                        // 同样的逻辑
+                        // 先清除选中的会话
                         selectedChat = nil
+                        // 返回首页
+                        dismiss()
                     } label: {
                         Label("新建会话", systemImage: "plus")
                             .font(.headline)

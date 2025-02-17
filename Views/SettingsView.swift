@@ -4,8 +4,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var settings: AppSettings
     private let deepSeekService = DeepSeekService.shared
-    @State private var showPrivacyPolicy = false
-    @State private var showUserAgreement = false
     @State private var showApiKey = false
     
     init() {
@@ -73,23 +71,15 @@ struct SettingsView: View {
             }
             
             Section {
-                Button("隐私政策") {
-                    showPrivacyPolicy = true
-                }
+                Link("隐私政策", destination: URL(string: "https://www.huohuaai.com/privacy-deepseekclient.html")!)
+                    .foregroundColor(.primary)
                 
-                Button("用户协议") {
-                    showUserAgreement = true
-                }
+                Link("用户协议", destination: URL(string: "https://www.huohuaai.com/terms-deepseekclient.html")!)
+                    .foregroundColor(.primary)
             } header: {
                 Text("法律条款")
             }
         }
         .navigationTitle("设置")
-        .sheet(isPresented: $showPrivacyPolicy) {
-            PrivacyPolicyView()
-        }
-        .sheet(isPresented: $showUserAgreement) {
-            UserAgreementView()
-        }
     }
 } 

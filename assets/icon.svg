@@ -1,0 +1,38 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- 定义渐变 -->
+  <defs>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60A5FA"/>
+      <stop offset="100%" style="stop-color:#3B82F6"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景矩形 -->
+  <rect x="0" y="0" width="128" height="128" fill="#334155"/>
+  
+  <!-- DS文字 -->
+  <g transform="translate(54, 64)">
+    <!-- D字母 -->
+    <path d="M-30 -25 
+             C-30 -25, -20 -25, -10 -25
+             C10 -25, 15 -15, 15 0
+             C15 15, 10 25, -10 25
+             C-20 25, -30 25, -30 25
+             Z" 
+          fill="none" 
+          stroke="url(#textGradient)" 
+          stroke-width="8"/>
+    
+    <!-- S字母 -->
+    <path d="M40 -25
+             C25 -25, 20 -15, 20 -10
+             C20 0, 40 0, 40 0
+             C40 0, 60 0, 60 10
+             C60 20, 55 25, 40 25
+             C30 25, 20 20, 20 20"
+          fill="none"
+          stroke="url(#textGradient)"
+          stroke-width="8"
+          stroke-linecap="round"/>
+  </g>
+</svg> 
