@@ -14,6 +14,7 @@ struct ChatView: View {
     // 用于缓存视图的状态
     @State private var visibleMessageIds = Set<String>()
     @State private var showSettingsSheet = false  // 添加这一行
+    @State private var userScrolling = false  // 添加用户滚动状态
     
     init(chat: Chat? = nil, isNewChat: Bool = false, resetTrigger: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
@@ -116,6 +117,19 @@ struct ChatView: View {
                 .scrollDismissesKeyboard(.immediately)
                 .scrollIndicators(.hidden)
                 .animation(.none, value: viewModel.messages.count)
+                // 添加手势识别器
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { _ in
+                            userScrolling = true
+                        }
+                        .onEnded { _ in
+                            // 延迟重置用户滚动状态，让用户有时间查看内容
+                            //DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            //    userScrolling = false
+                            //}
+                        }
+                )
                 .onAppear {
                     scrollProxy = proxy
                     scrollToBottom(animated: false)
@@ -232,6 +246,9 @@ struct ChatView: View {
     
     private func scrollToBottom(animated: Bool = true) {
         guard let lastMessage = viewModel.messages.last else { return }
+        
+        // 如果用户正在手动滚动，则不自动滚动
+        guard !userScrolling else { return }
         
         // 如果最后一条消息是 AI 回复且正在流式输出，总是滚动
         if lastMessage.role == .assistant && lastMessage.status == .streaming {
