@@ -66,6 +66,24 @@ struct ChatView: View {
                                     Text("输入任何问题开始对话")
                                 }
                                 .foregroundColor(.gray)
+                                
+                                // 添加开源信息
+                                HStack {
+                                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                                    Text("代码已开源于 GitHub")
+                                }
+                                .foregroundColor(.gray)
+                                
+                                // 添加可点击的链接
+                                Link(destination: URL(string: "https://github.com/antaeus001/deepseekClient")!) {
+                                    HStack {
+                                        Text("AI Client")
+                                            .underline()
+                                        Image(systemName: "arrow.up.right")
+                                    }
+                                    .font(.footnote)
+                                    .foregroundColor(.blue)
+                                }
                             }
                             .font(.footnote)
                             .padding()
