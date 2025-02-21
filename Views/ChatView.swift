@@ -15,6 +15,9 @@ struct ChatView: View {
     @State private var visibleMessageIds = Set<String>()
     @State private var showSettingsSheet = false  // 添加这一行
     @State private var userScrolling = false  // 添加用户滚动状态
+    @State private var scrollViewContentHeight: CGFloat = 0
+    @State private var scrollViewHeight: CGFloat = 0
+    @State private var scrollOffset: CGFloat = 0
     
     init(chat: Chat? = nil, isNewChat: Bool = false, resetTrigger: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
@@ -95,12 +98,42 @@ struct ChatView: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                     } else {
+                        GeometryReader { geometry in
+                            let frame = geometry.frame(in: .named("scroll"))
+                            let minY = frame.minY
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: minY
+                            )
+                            .onAppear {
+                                print("DEBUG: Initial scroll frame: \(frame)")
+                            }
+                            .onChange(of: minY) { newValue in
+                                print("DEBUG: MinY changed to: \(newValue)")
+                                scrollOffset = abs(newValue)
+                                
+                                let maxScroll = max(0, scrollViewContentHeight - scrollViewHeight)
+                                let distanceToBottom = max(0, maxScroll - scrollOffset)
+                                
+                                print("DEBUG: -------- Scroll Update --------")
+                                print("DEBUG: MinY: \(newValue)")
+                                print("DEBUG: Offset: \(scrollOffset)")
+                                print("DEBUG: Max scroll: \(maxScroll)")
+                                print("DEBUG: Distance to bottom: \(distanceToBottom)")
+                                print("DEBUG: -----------------------------------")
+                                
+                                if distanceToBottom <= 20 {
+                                    userScrolling = false
+                                }
+                            }
+                        }
+                        .frame(height: 0)
+                        
                         LazyVStack(spacing: 20) {
                             ForEach(viewModel.messages) { message in
                                 MessageView(message: message)
                                     .id(message.id)
                                     .transition(.opacity)
-                                    // 使用 onAppear 和 onDisappear 跟踪可见消息
                                     .onAppear {
                                         visibleMessageIds.insert(message.id)
                                     }
@@ -110,6 +143,12 @@ struct ChatView: View {
                             }
                         }
                         .padding(.vertical, 20)
+                        .overlay(
+                            GeometryReader { geometry in
+                                Color.clear
+                                    .preference(key: ContentHeightPreferenceKey.self, value: geometry.size.height)
+                            }
+                        )
                     }
                 }
                 .background(Color(.systemGroupedBackground))
@@ -120,8 +159,31 @@ struct ChatView: View {
                 // 添加手势识别器
                 .simultaneousGesture(
                     DragGesture()
-                        .onChanged { _ in
-                            userScrolling = true
+                        .onChanged { value in
+                            let translation = value.translation.height
+                            print("DEBUG: Drag translation: \(translation)")
+                            
+                            // 计算当前滚动位置到底部的距离
+                            let maxScroll = max(0, scrollViewContentHeight - scrollViewHeight)
+                            let distanceToBottom = max(0, maxScroll - scrollOffset)
+                            print("DEBUG: -------- Distance Calculation --------")
+                            print("DEBUG: ContentHeight: \(scrollViewContentHeight)")
+                            print("DEBUG: ViewHeight: \(scrollViewHeight)")
+                            print("DEBUG: Max scroll: \(maxScroll)")
+                            print("DEBUG: Current offset: \(scrollOffset)")
+                            print("DEBUG: Distance to bottom: \(distanceToBottom)")
+                            print("DEBUG: Current userScrolling: \(userScrolling)")
+                            print("DEBUG: -----------------------------------")
+                            
+                            if translation > 0 {
+                                // 向下滚动，远离底部
+                                print("DEBUG: Scrolling DOWN, setting userScrolling = true")
+                                userScrolling = true
+                            } else if translation <= 0 && distanceToBottom <= 20 {
+                                // 向上滚动且接近底部
+                                print("DEBUG: Scrolling UP near bottom, setting userScrolling = false")
+                                userScrolling = false
+                            }
                         }
                         .onEnded { _ in
                             // 延迟重置用户滚动状态，让用户有时间查看内容
@@ -149,6 +211,25 @@ struct ChatView: View {
                     scrollToBottom()
                 }
             }
+            .coordinateSpace(name: "scroll")
+            .onPreferenceChange(ContentHeightPreferenceKey.self) { height in
+                let oldHeight = scrollViewContentHeight
+                scrollViewContentHeight = height
+                print("DEBUG: ContentHeight changed: \(oldHeight) -> \(height)")
+            }
+            .background(
+                GeometryReader { geometry in
+                    Color.clear.onAppear {
+                        let oldHeight = scrollViewHeight
+                        scrollViewHeight = geometry.size.height
+                        print("DEBUG: ScrollViewHeight changed: \(oldHeight) -> \(geometry.size.height)")
+                    }
+                    .onChange(of: geometry.size.height) { newHeight in
+                        print("DEBUG: ScrollViewHeight updated: \(scrollViewHeight) -> \(newHeight)")
+                        scrollViewHeight = newHeight
+                    }
+                }
+            )
             
             // 输入区域
             VStack(spacing: 8) {
@@ -305,5 +386,19 @@ extension View {
                 .onChanged { _ in onPress() }
                 .onEnded { _ in onRelease() }
         )
+    }
+}
+
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+struct ContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 } 
