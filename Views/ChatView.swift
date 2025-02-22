@@ -105,22 +105,10 @@ struct ChatView: View {
                                 key: ScrollOffsetPreferenceKey.self,
                                 value: minY
                             )
-                            .onAppear {
-                                print("DEBUG: Initial scroll frame: \(frame)")
-                            }
                             .onChange(of: minY) { newValue in
-                                print("DEBUG: MinY changed to: \(newValue)")
                                 scrollOffset = abs(newValue)
-                                
                                 let maxScroll = max(0, scrollViewContentHeight - scrollViewHeight)
                                 let distanceToBottom = max(0, maxScroll - scrollOffset)
-                                
-                                print("DEBUG: -------- Scroll Update --------")
-                                print("DEBUG: MinY: \(newValue)")
-                                print("DEBUG: Offset: \(scrollOffset)")
-                                print("DEBUG: Max scroll: \(maxScroll)")
-                                print("DEBUG: Distance to bottom: \(distanceToBottom)")
-                                print("DEBUG: -----------------------------------")
                                 
                                 if distanceToBottom <= 20 {
                                     userScrolling = false
@@ -161,35 +149,16 @@ struct ChatView: View {
                     DragGesture()
                         .onChanged { value in
                             let translation = value.translation.height
-                            print("DEBUG: Drag translation: \(translation)")
-                            
-                            // 计算当前滚动位置到底部的距离
                             let maxScroll = max(0, scrollViewContentHeight - scrollViewHeight)
                             let distanceToBottom = max(0, maxScroll - scrollOffset)
-                            print("DEBUG: -------- Distance Calculation --------")
-                            print("DEBUG: ContentHeight: \(scrollViewContentHeight)")
-                            print("DEBUG: ViewHeight: \(scrollViewHeight)")
-                            print("DEBUG: Max scroll: \(maxScroll)")
-                            print("DEBUG: Current offset: \(scrollOffset)")
-                            print("DEBUG: Distance to bottom: \(distanceToBottom)")
-                            print("DEBUG: Current userScrolling: \(userScrolling)")
-                            print("DEBUG: -----------------------------------")
                             
                             if translation > 0 {
                                 // 向下滚动，远离底部
-                                print("DEBUG: Scrolling DOWN, setting userScrolling = true")
                                 userScrolling = true
                             } else if translation <= 0 && distanceToBottom <= 20 {
                                 // 向上滚动且接近底部
-                                print("DEBUG: Scrolling UP near bottom, setting userScrolling = false")
                                 userScrolling = false
                             }
-                        }
-                        .onEnded { _ in
-                            // 延迟重置用户滚动状态，让用户有时间查看内容
-                            //DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            //    userScrolling = false
-                            //}
                         }
                 )
                 .onAppear {
@@ -213,19 +182,14 @@ struct ChatView: View {
             }
             .coordinateSpace(name: "scroll")
             .onPreferenceChange(ContentHeightPreferenceKey.self) { height in
-                let oldHeight = scrollViewContentHeight
                 scrollViewContentHeight = height
-                print("DEBUG: ContentHeight changed: \(oldHeight) -> \(height)")
             }
             .background(
                 GeometryReader { geometry in
                     Color.clear.onAppear {
-                        let oldHeight = scrollViewHeight
                         scrollViewHeight = geometry.size.height
-                        print("DEBUG: ScrollViewHeight changed: \(oldHeight) -> \(geometry.size.height)")
                     }
                     .onChange(of: geometry.size.height) { newHeight in
-                        print("DEBUG: ScrollViewHeight updated: \(scrollViewHeight) -> \(newHeight)")
                         scrollViewHeight = newHeight
                     }
                 }
