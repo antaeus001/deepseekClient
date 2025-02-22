@@ -1,10 +1,14 @@
 import SwiftUI
+import Photos
 
 struct ImagePreviewView: View {
     let markdownContent: String
     @Environment(\.dismiss) private var dismiss
     @State private var generatedImage: UIImage?
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showingSaveSuccess = false
+    @State private var showingSaveError = false
+    @State private var showToast = false  // 添加 Toast 状态
     
     // 创建一个独立的视图来处理 markdown 内容
     private let contentView: MessageContentView
@@ -59,9 +63,18 @@ struct ImagePreviewView: View {
                     }
                 }
                 
-                if generatedImage != nil {
+                if let image = generatedImage {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        ShareLink(item: Image(uiImage: generatedImage!), preview: SharePreview("分享图片"))
+                        Menu {
+                            ShareLink(item: Image(uiImage: image), preview: SharePreview("分享图片"))
+                            Button(action: {
+                                saveImageToAlbum(image)
+                            }) {
+                                Label("保存到相册", systemImage: "square.and.arrow.down")
+                            }
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                        }
                     }
                 }
             }
@@ -71,6 +84,63 @@ struct ImagePreviewView: View {
                     .frame(width: 0, height: 0)
                     .hidden()
             )
+            .alert("保存成功", isPresented: $showingSaveSuccess) {
+                Button("确定", role: .cancel) { }
+            }
+            .alert("保存失败", isPresented: $showingSaveError) {
+                Button("确定", role: .cancel) { }
+            } message: {
+                Text("请在设置中允许应用访问相册")
+            }
+            .overlay(alignment: .bottom) {
+                // Toast 提示
+                if showToast {
+                    ToastView(message: "图片已保存到相册")
+                        .transition(.move(edge: .bottom))
+                        .animation(.spring(), value: showToast)
+                }
+            }
+        }
+    }
+    
+    private func saveImageToAlbum(_ image: UIImage) {
+        let status = PHPhotoLibrary.authorizationStatus()
+        
+        switch status {
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization { status in
+                DispatchQueue.main.async {
+                    if status == .authorized {
+                        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+                        // 显示 Toast
+                        withAnimation {
+                            showToast = true
+                        }
+                        // 3秒后隐藏
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            withAnimation {
+                                showToast = false
+                            }
+                        }
+                    } else {
+                        showingSaveError = true
+                    }
+                }
+            }
+        case .authorized:
+            UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+            // 显示 Toast
+            withAnimation {
+                showToast = true
+            }
+            // 3秒后隐藏
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                withAnimation {
+                    showToast = false
+                }
+            }
+        default:
+            showingSaveError = true
         }
     }
     
@@ -103,5 +173,20 @@ private struct ViewSizeKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
         value = nextValue()
+    }
+}
+
+// 添加 Toast 视图组件
+struct ToastView: View {
+    let message: String
+    
+    var body: some View {
+        Text(message)
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.black.opacity(0.8))
+            .cornerRadius(20)
+            .padding(.bottom, 40)
     }
 } 
