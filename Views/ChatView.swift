@@ -18,6 +18,8 @@ struct ChatView: View {
     @State private var scrollViewContentHeight: CGFloat = 0
     @State private var scrollViewHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
+    @State private var showImagePreview = false  // 添加状态变量
+    @State private var selectedMessageContent = ""  // 添加状态变量
     
     init(chat: Chat? = nil, isNewChat: Bool = false, resetTrigger: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
@@ -119,15 +121,46 @@ struct ChatView: View {
                         
                         LazyVStack(spacing: 20) {
                             ForEach(viewModel.messages) { message in
-                                MessageView(message: message)
-                                    .id(message.id)
-                                    .transition(.opacity)
-                                    .onAppear {
-                                        visibleMessageIds.insert(message.id)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    MessageView(message: message)
+                                        .id(message.id)
+                                        .transition(.opacity)
+                                        .onAppear {
+                                            visibleMessageIds.insert(message.id)
+                                        }
+                                        .onDisappear {
+                                            visibleMessageIds.remove(message.id)
+                                        }
+                                    
+                                    if message.role == .assistant {
+                                        Button(action: {
+                                            // 获取完整的消息内容，包括推理内容
+                                            var fullContent = message.content
+                                            if let reasoningContent = message.reasoningContent {
+                                                fullContent += "\n\n推理过程：\n" + reasoningContent
+                                            }
+                                            selectedMessageContent = fullContent
+                                            print("选中的消息内容：\n\(fullContent)")  // 添加日志
+                                            showImagePreview = true
+                                        }) {
+                                            HStack {
+                                                Image(systemName: "photo.on.rectangle.angled")
+                                                    .font(.system(size: 14))
+                                                Text("生成图片")
+                                                    .font(.system(size: 14))
+                                            }
+                                            .foregroundColor(.blue)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(Color.blue.opacity(0.1))
+                                            .cornerRadius(8)
+                                        }
+                                        .padding(.leading, 46)
+                                        .sheet(isPresented: $showImagePreview) {
+                                            ImagePreviewView(markdownContent: selectedMessageContent)
+                                        }
                                     }
-                                    .onDisappear {
-                                        visibleMessageIds.remove(message.id)
-                                    }
+                                }
                             }
                         }
                         .padding(.vertical, 20)
