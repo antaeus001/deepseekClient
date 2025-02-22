@@ -46,10 +46,7 @@ struct ImagePreviewView: View {
         print("准备生成图片，markdown内容：\n\(markdownContent)")
         
         let contentView = VStack(alignment: .leading, spacing: 16) {
-            Text(markdownContent)
-                .font(.system(size: 16))
-                .lineSpacing(6)
-                .fixedSize(horizontal: false, vertical: true)
+            MessageContentView(content: markdownContent)
                 .padding(20)
                 .frame(maxWidth: UIScreen.main.bounds.width - 32)
         }
