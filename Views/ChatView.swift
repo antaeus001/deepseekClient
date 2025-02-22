@@ -18,8 +18,8 @@ struct ChatView: View {
     @State private var scrollViewContentHeight: CGFloat = 0
     @State private var scrollViewHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
-    @State private var showImagePreview = false  // 添加状态变量
-    @State private var selectedMessageContent = ""  // 添加状态变量
+    @State private var showImagePreview = false
+    @State private var previewContent: String?  // 使用可选字符串替代之前的状态变量
     
     init(chat: Chat? = nil, isNewChat: Bool = false, resetTrigger: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
@@ -139,9 +139,8 @@ struct ChatView: View {
                                             if let reasoningContent = message.reasoningContent {
                                                 fullContent += "\n\n推理过程：\n" + reasoningContent
                                             }
-                                            selectedMessageContent = fullContent
-                                            print("选中的消息内容：\n\(fullContent)")  // 添加日志
-                                            showImagePreview = true
+                                            // 直接设置预览内容
+                                            previewContent = fullContent
                                         }) {
                                             HStack {
                                                 Image(systemName: "photo.on.rectangle.angled")
@@ -156,8 +155,9 @@ struct ChatView: View {
                                             .cornerRadius(8)
                                         }
                                         .padding(.leading, 46)
-                                        .sheet(isPresented: $showImagePreview) {
-                                            ImagePreviewView(markdownContent: selectedMessageContent)
+                                        // 使用 item 形式的 sheet
+                                        .sheet(item: $previewContent) { content in
+                                            ImagePreviewView(markdownContent: content)
                                         }
                                     }
                                 }
@@ -398,4 +398,9 @@ struct ContentHeightPreferenceKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
+}
+
+// 添加扩展来支持 sheet item
+extension String: Identifiable {
+    public var id: String { self }
 } 
