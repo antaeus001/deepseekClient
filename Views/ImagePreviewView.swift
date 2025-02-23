@@ -108,11 +108,13 @@ struct ImagePreviewView: View {
                                     Label("保存全部", systemImage: "square.and.arrow.down.fill")
                                 }
                             } else {
-                                ShareLink(item: Image(uiImage: image), preview: SharePreview("分享图片"))
                                 Button(action: {
                                     saveImageToAlbum(image)
                                 }) {
                                     Label("保存到相册", systemImage: "square.and.arrow.down")
+                                }
+                                ShareLink(item: Image(uiImage: image), preview: SharePreview("分享图片")) {
+                                    Label("分享", systemImage: "square.and.arrow.up")
                                 }
                                 Button(action: {
                                     sliceImage(image)
@@ -121,7 +123,7 @@ struct ImagePreviewView: View {
                                 }
                             }
                         } label: {
-                            Image(systemName: "square.and.arrow.up")
+                            Image(systemName: "square.and.arrow.down")
                         }
                     }
                 }
