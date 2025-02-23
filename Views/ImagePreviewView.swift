@@ -203,24 +203,31 @@ struct ImagePreviewView: View {
             
             let view = hostingController.view!
             
-            // 设置视图大小
+            // 设置视图大小，添加额外空间确保捕获所有内容
             let fittingSize = view.sizeThatFits(CGSize(
                 width: UIScreen.main.bounds.width,
                 height: UIView.layoutFittingCompressedSize.height
             ))
-            view.frame = CGRect(origin: .zero, size: fittingSize)
+            let finalSize = CGSize(
+                width: fittingSize.width,
+                height: fittingSize.height + 100 // 增加到 80 points 以确保完全捕获圆角
+            )
+            view.frame = CGRect(origin: .zero, size: finalSize)
             
             // 强制布局
             view.setNeedsLayout()
             view.layoutIfNeeded()
             
             // 创建图片上下文并渲染
-            UIGraphicsBeginImageContextWithOptions(fittingSize, true, UIScreen.main.scale)
+            UIGraphicsBeginImageContextWithOptions(finalSize, true, UIScreen.main.scale)
             defer { UIGraphicsEndImageContext() }
             
             // 填充白色背景
             UIColor.white.setFill()
-            UIRectFill(CGRect(origin: .zero, size: fittingSize))
+            UIRectFill(CGRect(origin: .zero, size: finalSize))
+            
+            // 确保视图背景是透明的
+            view.backgroundColor = .clear
             
             // 渲染视图层级
             view.layer.render(in: UIGraphicsGetCurrentContext()!)
