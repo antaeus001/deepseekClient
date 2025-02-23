@@ -86,7 +86,7 @@ struct ImagePreviewView: View {
                         if showingSlicedImages {
                             showingSlicedImages = false
                         } else {
-                            dismiss()
+                        dismiss()
                         }
                     }
                 }
@@ -204,24 +204,36 @@ struct ImagePreviewView: View {
             
             let view = hostingController.view!
             
-            // 设置视图大小
-            let fittingSize = view.sizeThatFits(CGSize(
-                width: UIScreen.main.bounds.width,
-                height: UIView.layoutFittingCompressedSize.height
-            ))
+            // 先设置一个临时的大小来获取实际内容高度
+            view.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: UIView.layoutFittingExpandedSize.height)
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
             
-            // 调整最终尺寸，不再使用负的 y 偏移
-            view.frame = CGRect(origin: .zero, size: fittingSize)
+            // 获取实际内容大小
+            let fittingSize = view.systemLayoutSizeFitting(
+                CGSize(width: UIScreen.main.bounds.width, height: UIView.layoutFittingExpandedSize.height),
+                withHorizontalFittingPriority: .required,
+                verticalFittingPriority: .fittingSizeLevel
+            )
+            
+            // 在上下都添加额外空间来确保圆角完全显示
+            let padding: CGFloat = 50
+            let finalSize = CGSize(
+                width: fittingSize.width,
+                height: fittingSize.height + padding * 2
+            )
+            
+            // 设置视图frame，居中显示内容
+            view.frame = CGRect(
+                origin: CGPoint(x: 0, y: padding),
+                size: fittingSize
+            )
             
             // 强制布局
             view.setNeedsLayout()
             view.layoutIfNeeded()
             
-            // 创建图片上下文并渲染，只在底部添加额外空间
-            let finalSize = CGSize(
-                width: fittingSize.width,
-                height: fittingSize.height + 100 // 额外空间只添加在底部
-            )
+            // 创建图片上下文并渲染
             UIGraphicsBeginImageContextWithOptions(finalSize, true, UIScreen.main.scale)
             defer { UIGraphicsEndImageContext() }
             
@@ -232,7 +244,7 @@ struct ImagePreviewView: View {
             // 确保视图背景是透明的
             view.backgroundColor = .clear
             
-            // 在顶部渲染视图
+            // 渲染视图层级
             view.layer.render(in: UIGraphicsGetCurrentContext()!)
             
             // 获取生成的图片
@@ -328,8 +340,8 @@ struct ImagePreviewView: View {
             // 创建该段落的预览内容
             let segmentContent = VStack(alignment: .leading, spacing: 16) {
                 contentView
-                    .padding(20)
-                    .frame(maxWidth: UIScreen.main.bounds.width - 32)
+                .padding(20)
+                .frame(maxWidth: UIScreen.main.bounds.width - 32)
                     .background(
                         Group {
                             if segment.contains("```") {
@@ -339,16 +351,16 @@ struct ImagePreviewView: View {
                         }
                     )
                     .frame(maxHeight: .infinity, alignment: .top)
-            }
-            .background(colorScheme == .dark ? Color(.systemGray6) : .white)
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
-            .padding(.horizontal, 16)
-            
+        }
+        .background(colorScheme == .dark ? Color(.systemGray6) : .white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .padding(.horizontal, 16)
+        
             // 渲染图片
             let renderer = ImageRenderer(content: segmentContent)
-            renderer.scale = UIScreen.main.scale
-            renderer.isOpaque = true
+        renderer.scale = UIScreen.main.scale
+        renderer.isOpaque = true
             renderer.proposedSize = ProposedViewSize(
                 width: UIScreen.main.bounds.width,
                 height: nil  // 让高度自适应内容
