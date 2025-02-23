@@ -24,16 +24,17 @@ struct ImagePreviewView: View {
     // 添加一个视图构建器来创建预览内容
     @ViewBuilder
     private var previewContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) {  // 移除 VStack 的间距
             contentView
-                .padding(20)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)  // 减小垂直内边距
                 .frame(maxWidth: UIScreen.main.bounds.width - 32)
-                // 移除 task 和背景，让 MessageContentView 自己处理代码块渲染
         }
         .background(colorScheme == .dark ? Color(.systemGray6) : .white)
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
         .padding(.horizontal, 16)
+        .padding(.vertical, 0)  // 移除外部垂直内边距
     }
     
     var body: some View {
@@ -203,22 +204,24 @@ struct ImagePreviewView: View {
             
             let view = hostingController.view!
             
-            // 设置视图大小，添加额外空间确保捕获所有内容
+            // 设置视图大小
             let fittingSize = view.sizeThatFits(CGSize(
                 width: UIScreen.main.bounds.width,
                 height: UIView.layoutFittingCompressedSize.height
             ))
-            let finalSize = CGSize(
-                width: fittingSize.width,
-                height: fittingSize.height + 100 // 增加到 80 points 以确保完全捕获圆角
-            )
-            view.frame = CGRect(origin: .zero, size: finalSize)
+            
+            // 调整最终尺寸，不再使用负的 y 偏移
+            view.frame = CGRect(origin: .zero, size: fittingSize)
             
             // 强制布局
             view.setNeedsLayout()
             view.layoutIfNeeded()
             
-            // 创建图片上下文并渲染
+            // 创建图片上下文并渲染，只在底部添加额外空间
+            let finalSize = CGSize(
+                width: fittingSize.width,
+                height: fittingSize.height + 100 // 额外空间只添加在底部
+            )
             UIGraphicsBeginImageContextWithOptions(finalSize, true, UIScreen.main.scale)
             defer { UIGraphicsEndImageContext() }
             
@@ -229,7 +232,7 @@ struct ImagePreviewView: View {
             // 确保视图背景是透明的
             view.backgroundColor = .clear
             
-            // 渲染视图层级
+            // 在顶部渲染视图
             view.layer.render(in: UIGraphicsGetCurrentContext()!)
             
             // 获取生成的图片
