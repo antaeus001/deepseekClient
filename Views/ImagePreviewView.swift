@@ -24,17 +24,16 @@ struct ImagePreviewView: View {
     // 添加一个视图构建器来创建预览内容
     @ViewBuilder
     private var previewContent: some View {
-        VStack(alignment: .leading, spacing: 0) {  // 移除 VStack 的间距
+        VStack(alignment: .leading, spacing: 0) {
             contentView
-                .padding(.horizontal, 20)
-                .padding(.vertical, 4)  // 减小垂直内边距
-                .frame(maxWidth: UIScreen.main.bounds.width - 32)
+                .padding(.horizontal, 50)
+                .padding(.vertical, 80)
+                .frame(maxWidth: UIScreen.main.bounds.width)
+                .environment(\.colorScheme, .light)  // 强制使用浅色模式
         }
-        .background(colorScheme == .dark ? Color(.systemGray6) : .white)
+        .background(.white)  // 统一使用白色背景
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 0)  // 移除外部垂直内边距
     }
     
     var body: some View {
@@ -113,13 +112,13 @@ struct ImagePreviewView: View {
                                 }) {
                                     Label("保存到相册", systemImage: "square.and.arrow.down")
                                 }
-                                ShareLink(item: Image(uiImage: image), preview: SharePreview("分享图片")) {
-                                    Label("分享", systemImage: "square.and.arrow.up")
-                                }
                                 Button(action: {
                                     sliceImage(image)
                                 }) {
-                                    Label("切片(3:4)", systemImage: "rectangle.split.3x1")
+                                    Label("小红书切片", systemImage: "rectangle.split.3x1")
+                                }
+                                ShareLink(item: Image(uiImage: image), preview: SharePreview("分享图片")) {
+                                    Label("分享", systemImage: "square.and.arrow.up")
                                 }
                             }
                         } label: {
@@ -268,21 +267,32 @@ struct ImagePreviewView: View {
             let segments = splitMarkdownContent(markdownContent)
             var slicedImages: [UIImage] = []
             
+            // 使用原始图片的宽度
+            let targetWidth = image.size.width
+            
             // 为每个分段生成图片
             for segment in segments {
                 if let originalImage = await generateImageForSegment(segment) {
-                    // 在这里创建 3:4 比例的图片
-                    let targetWidth = originalImage.size.width
-                    let targetHeight = max(targetWidth * (4.0/3.0), originalImage.size.height)
+                    // 使用原始图片的实际高度
+                    let targetHeight = originalImage.size.height
                     
-                    UIGraphicsBeginImageContextWithOptions(CGSize(width: targetWidth, height: targetHeight), true, originalImage.scale)
+                    UIGraphicsBeginImageContextWithOptions(CGSize(width: targetWidth, height: targetHeight), true, UIScreen.main.scale)
                     
                     // 填充白色背景
                     UIColor.white.setFill()
                     UIRectFill(CGRect(origin: .zero, size: CGSize(width: targetWidth, height: targetHeight)))
                     
-                    // 在顶部绘制原始图片
-                    originalImage.draw(in: CGRect(x: 0, y: 0, width: originalImage.size.width, height: originalImage.size.height))
+                    // 计算缩放比例
+                    let scale = targetWidth / originalImage.size.width
+                    let scaledHeight = originalImage.size.height * scale
+                    
+                    // 绘制原始图片
+                    originalImage.draw(in: CGRect(
+                        x: 0,
+                        y: 0,
+                        width: targetWidth,
+                        height: scaledHeight
+                    ))
                     
                     if let finalImage = UIGraphicsGetImageFromCurrentImageContext() {
                         slicedImages.append(finalImage)
@@ -300,76 +310,194 @@ struct ImagePreviewView: View {
     }
     
     private func splitMarkdownContent(_ content: String) -> [String] {
-        // 按照段落或标题分割内容
-        let segments = content.components(separatedBy: "\n\n")
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        // 调试：打印原始内容和处理后的内容
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        print("\n原始内容长度: \(content.count)")
+        print("处理后内容长度: \(trimmedContent.count)")
         
-        var result: [String] = []
-        var currentSegment = ""
-        let targetRatio: CGFloat = 3.0 / 4.0
-        let maxCharsPerSegment = 500 // 根据实际情况调整
+        // 将内容按行分割，保留空行
+        let lines = content.components(separatedBy: .newlines)
+        var segments: [String] = []
+        var currentSegment: [String] = []
+        var inCodeBlock = false
+        var inMathBlock = false
+        var inTable = false
         
-        for segment in segments {
-            let newSegment = currentSegment.isEmpty ? segment : currentSegment + "\n\n" + segment
+        func shouldStartNewSegment(_ line: String) -> Bool {
+            let segmentContent = currentSegment.joined(separator: "\n")
+            let contentLength = segmentContent.count
             
-            // 如果当前段落加上新段落超过限制，就开始新的分段
-            if currentSegment.count + segment.count > maxCharsPerSegment {
-                if !currentSegment.isEmpty {
-                    result.append(currentSegment)
+            print("\n当前段落信息：")
+            print("原始长度：\(contentLength)")
+            print("行数：\(currentSegment.count)")
+            print("内容预览：\(segmentContent.prefix(50))...")
+            
+            return contentLength > 400
+        }
+        
+        func finalizeCurrentSegment() {
+            if !currentSegment.isEmpty {
+                let segment = currentSegment.joined(separator: "\n")
+                if !segment.isEmpty {
+                    print("\n添加新段落:")
+                    print("长度：\(segment.count)")
+                    print("行数：\(currentSegment.count)")
+                    print("内容：\n\(segment)")
+                    segments.append(segment)
                 }
-                currentSegment = segment
-            } else {
-                currentSegment = newSegment
+                currentSegment.removeAll()
             }
         }
         
-        // 添加最后一个分段
-        if !currentSegment.isEmpty {
-            result.append(currentSegment)
+        // 处理每一行
+        for (index, line) in lines.enumerated() {
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // 添加当前行到段落
+            currentSegment.append(line)
+            
+            // 处理代码块
+            if trimmedLine.hasPrefix("```") {
+                if inCodeBlock {
+                    inCodeBlock = false
+                    finalizeCurrentSegment()
+                } else {
+                    inCodeBlock = true
+                }
+                continue
+            }
+            
+            // 处理数学公式块
+            if trimmedLine.hasPrefix("$$") {
+                if inMathBlock {
+                    inMathBlock = false
+                    finalizeCurrentSegment()
+                } else {
+                    inMathBlock = true
+                }
+                continue
+            }
+            
+            // 处理表格
+            if trimmedLine.contains("|") && trimmedLine.contains("-") {
+                if !inTable {
+                    inTable = true
+                }
+            } else if inTable && trimmedLine.isEmpty {
+                inTable = false
+                finalizeCurrentSegment()
+            }
+            
+            // 检查是否需要开始新段落
+            if !inCodeBlock && !inMathBlock && !inTable {
+                if shouldStartNewSegment(line) {
+                    finalizeCurrentSegment()
+                }
+            }
+            
+            // 处理最后一行
+            if index == lines.count - 1 {
+                if !currentSegment.isEmpty {
+                    finalizeCurrentSegment()
+                }
+            }
         }
         
-        return result
+        // 打印最终分段信息
+        print("\n最终分段结果:")
+        print("总分段数量: \(segments.count)")
+        print("原始内容总长度: \(content.count)")
+        print("分段后总长度: \(segments.map { $0.count }.reduce(0, +))")
+        segments.enumerated().forEach { index, segment in
+            print("\n第\(index + 1)段:")
+            print("长度: \(segment.count)")
+            print("行数: \(segment.components(separatedBy: .newlines).count)")
+            print("完整内容：\n\(segment)")
+            print("---")
+        }
+        
+        return segments
     }
     
     private func generateImageForSegment(_ segment: String) async -> UIImage? {
-        // 先创建内容视图
-        let contentView = MessageContentView(content: segment)
-        
-        // 等待一小段时间让代码块渲染完成
-        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
-        
         return await MainActor.run {
             // 创建该段落的预览内容
             let segmentContent = VStack(alignment: .leading, spacing: 16) {
-                contentView
-                .padding(20)
-                .frame(maxWidth: UIScreen.main.bounds.width - 32)
-                    .background(
-                        Group {
-                            if segment.contains("```") {
-                                Color(uiColor: .systemGray6)
-                                    .frame(minHeight: 200)
-                            }
-                        }
-                    )
-                    .frame(maxHeight: .infinity, alignment: .top)
-        }
-        .background(colorScheme == .dark ? Color(.systemGray6) : .white)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
-        .padding(.horizontal, 16)
-        
-            // 渲染图片
-            let renderer = ImageRenderer(content: segmentContent)
-        renderer.scale = UIScreen.main.scale
-        renderer.isOpaque = true
-            renderer.proposedSize = ProposedViewSize(
-                width: UIScreen.main.bounds.width,
-                height: nil  // 让高度自适应内容
+                MessageContentView(content: segment)
+                    .padding(.horizontal, 50)
+                    .padding(.vertical, 40)
+                    .frame(maxWidth: UIScreen.main.bounds.width)
+                    .environment(\.colorScheme, .light)  // 强制使用浅色模式
+            }
+            .background(.white)
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+            
+            // 创建一个 UIHostingController 来托管 SwiftUI 视图
+            let hostingController = UIHostingController(rootView: segmentContent)
+            
+            // 添加到临时窗口以确保正确布局
+            let window = UIWindow(frame: UIScreen.main.bounds)
+            window.rootViewController = hostingController
+            window.makeKeyAndVisible()
+            
+            let view = hostingController.view!
+            
+            // 先设置一个临时的大小来获取实际内容高度
+            view.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: UIView.layoutFittingExpandedSize.height)
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
+            
+            // 获取实际内容大小
+            let fittingSize = view.systemLayoutSizeFitting(
+                CGSize(width: UIScreen.main.bounds.width, height: UIView.layoutFittingExpandedSize.height),
+                withHorizontalFittingPriority: .required,
+                verticalFittingPriority: .fittingSizeLevel
             )
             
-            // 直接返回原始渲染图片
-            return renderer.uiImage
+            // 计算目标高度，确保不超过 4:3 比例
+            let targetWidth = fittingSize.width
+            let targetHeight = max(
+                fittingSize.height + 60, // 确保有足够的空间显示内容
+                targetWidth * (4.0/3.0)  // 保持最小 3:4 比例
+            )
+            
+            let finalSize = CGSize(
+                width: targetWidth,
+                height: targetHeight
+            )
+            
+            // 设置视图frame，居中显示内容
+            view.frame = CGRect(
+                origin: CGPoint(x: 0, y: (targetHeight - fittingSize.height) / 2), // 垂直居中
+                size: fittingSize
+            )
+            
+            // 强制布局
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
+            
+            // 创建图片上下文并渲染
+            UIGraphicsBeginImageContextWithOptions(finalSize, true, UIScreen.main.scale)
+            defer { UIGraphicsEndImageContext() }
+            
+            // 填充白色背景
+            UIColor.white.setFill()
+            UIRectFill(CGRect(origin: .zero, size: finalSize))
+            
+            // 确保视图背景是透明的
+            view.backgroundColor = .white  // 改为白色背景
+            
+            // 渲染视图层级
+            view.layer.render(in: UIGraphicsGetCurrentContext()!)
+            
+            // 获取生成的图片
+            let image = UIGraphicsGetImageFromCurrentImageContext()
+            
+            // 清理临时窗口
+            window.isHidden = true
+            
+            return image
         }
     }
     
