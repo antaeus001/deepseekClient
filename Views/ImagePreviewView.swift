@@ -318,14 +318,54 @@ struct ImagePreviewView: View {
             // 首先分割 markdown 内容
             let segments = splitMarkdownContent(markdownContent)
             var slicedImages: [UIImage] = []
+            var currentIndex = 0
+            
+            // 计算总图片数
+            var totalImages = 0
+            let hasReasoningProcess = segments.first?.contains("推理过程") ?? false
+            
+            // 预计算总图片数
+            for (index, segment) in segments.enumerated() {
+                let isReasoningSection = index == 0 && hasReasoningProcess
+                if isReasoningSection && segment.count > 400 {
+                    totalImages += splitReasoningContent(segment).count
+                } else {
+                    totalImages += 1
+                }
+            }
             
             // 使用原始图片的宽度
             let targetWidth = image.size.width
             
-            // 为每个分段生成图片
+            // 生成切片图片
             for (index, segment) in segments.enumerated() {
-                if let originalImage = await generateImageForSegment(segment, index: index, total: segments.count) {
-                    slicedImages.append(originalImage)
+                let isReasoningSection = index == 0 && hasReasoningProcess
+                
+                // 如果是推理过程部分且内容较长，进行二次分段
+                if isReasoningSection && segment.count > 400 {
+                    // 将推理过程部分再次分段
+                    let reasoningSubSegments = splitReasoningContent(segment)
+                    for subSegment in reasoningSubSegments {
+                        if let originalImage = await generateImageForSegment(
+                            subSegment,
+                            index: currentIndex,
+                            total: totalImages,
+                            isReasoning: true
+                        ) {
+                            slicedImages.append(originalImage)
+                            currentIndex += 1
+                        }
+                    }
+                } else {
+                    if let originalImage = await generateImageForSegment(
+                        segment,
+                        index: currentIndex,
+                        total: totalImages,
+                        isReasoning: isReasoningSection
+                    ) {
+                        slicedImages.append(originalImage)
+                        currentIndex += 1
+                    }
                 }
             }
             
@@ -430,20 +470,66 @@ struct ImagePreviewView: View {
         return finalSegments
     }
     
-    private func generateImageForSegment(_ segment: String, index: Int, total: Int) async -> UIImage? {
+    private func splitReasoningContent(_ content: String) -> [String] {
+        let lines = content.components(separatedBy: .newlines)
+        var segments: [String] = []
+        var currentSegment: [String] = []
+        var currentLength = 0
+        
+        // 确保第一行（包含"推理过程"）总是在第一个分段中
+        if let firstLine = lines.first {
+            currentSegment.append(firstLine)
+            currentLength = firstLine.count
+        }
+        
+        for line in lines.dropFirst() {
+            let lineLength = line.count
+            
+            if currentLength + lineLength > 400 && !currentSegment.isEmpty {
+                segments.append(currentSegment.joined(separator: "\n"))
+                currentSegment = []
+                currentLength = 0
+            }
+            
+            currentSegment.append(line)
+            currentLength += lineLength
+        }
+        
+        if !currentSegment.isEmpty {
+            segments.append(currentSegment.joined(separator: "\n"))
+        }
+        
+        return segments
+    }
+    
+    private func generateImageForSegment(_ segment: String, index: Int, total: Int, isReasoning: Bool = false) async -> UIImage? {
         return await MainActor.run {
             // 创建该段落的预览内容
             let segmentContent = VStack(alignment: .leading, spacing: 16) {
-                MessageContentView(content: segment)
-                    .padding(.horizontal, 50)
-                    .padding(.vertical, 40)
-                    .frame(maxWidth: UIScreen.main.bounds.width)
-                    .environment(\.colorScheme, .light)  // 强制使用浅色模式
+                if isReasoning {
+                    // 推理过程部分的样式
+                    MessageContentView(content: segment)
+                        .padding(.horizontal, 50)
+                        .padding(.vertical, 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(UIColor.systemGray6))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                } else {
+                    // 普通内容的样式
+                    MessageContentView(content: segment)
+                        .padding(.horizontal, 50)
+                        .padding(.vertical, 40)
+                }
             }
+            .frame(maxWidth: UIScreen.main.bounds.width)
             .background(.white)
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
-            
+            .environment(\.colorScheme, .light)
+
             // 创建一个 UIHostingController 来托管 SwiftUI 视图
             let hostingController = UIHostingController(rootView: segmentContent)
             
