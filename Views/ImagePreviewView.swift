@@ -195,8 +195,23 @@ struct ImagePreviewView: View {
     
     private func generateImage() async {
         await MainActor.run {
+            // 首先处理内容，将推理过程移到后面
+            let segments = splitMarkdownContent(markdownContent)
+            let reorderedContent = segments.joined(separator: "\n\n")
+            
             // 创建一个 UIHostingController 来托管 SwiftUI 视图
-            let hostingController = UIHostingController(rootView: previewContent)
+            let hostingController = UIHostingController(rootView: 
+                VStack(alignment: .leading, spacing: 0) {
+                    MessageContentView(content: reorderedContent)
+                        .padding(.horizontal, 50)
+                        .padding(.vertical, 80)
+                        .frame(maxWidth: UIScreen.main.bounds.width)
+                        .environment(\.colorScheme, .light)  // 强制使用浅色模式
+                }
+                .background(.white)  // 统一使用白色背景
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+            )
             
             // 添加到临时窗口以确保正确布局
             let window = UIWindow(frame: UIScreen.main.bounds)
@@ -300,14 +315,14 @@ struct ImagePreviewView: View {
     }
     
     private func splitMarkdownContent(_ content: String) -> [String] {
-        // 调试：打印原始内容和处理后的内容
         let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
         print("\n原始内容长度: \(content.count)")
         print("处理后内容长度: \(trimmedContent.count)")
         
-        // 将内容按行分割，保留空行
+        // 将内容按行分割
         let lines = content.components(separatedBy: .newlines)
-        var segments: [String] = []
+        var mainSegments: [String] = []
+        var reasoningSegment: [String] = []
         var currentSegment: [String] = []
         var inCodeBlock = false
         var inMathBlock = false
@@ -316,12 +331,6 @@ struct ImagePreviewView: View {
         func shouldStartNewSegment(_ line: String) -> Bool {
             let segmentContent = currentSegment.joined(separator: "\n")
             let contentLength = segmentContent.count
-            
-            print("\n当前段落信息：")
-            print("原始长度：\(contentLength)")
-            print("行数：\(currentSegment.count)")
-            print("内容预览：\(segmentContent.prefix(50))...")
-            
             return contentLength > 400
         }
         
@@ -329,84 +338,74 @@ struct ImagePreviewView: View {
             if !currentSegment.isEmpty {
                 let segment = currentSegment.joined(separator: "\n")
                 if !segment.isEmpty {
-                    print("\n添加新段落:")
-                    print("长度：\(segment.count)")
-                    print("行数：\(currentSegment.count)")
-                    print("内容：\n\(segment)")
-                    segments.append(segment)
+                    mainSegments.append(segment)
                 }
                 currentSegment.removeAll()
             }
         }
         
-        // 处理每一行
+        // 首先找到推理过程部分
+        var reasoningStartIndex: Int = -1
         for (index, line) in lines.enumerated() {
-            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.contains("推理过程") || line.contains("思考过程") {
+                reasoningStartIndex = index
+                break
+            }
+        }
+        
+        if reasoningStartIndex != -1 {
+            // 将推理过程部分提取出来
+            let reasoningLines = Array(lines[reasoningStartIndex...])
+            // 将剩余部分作为主要内容
+            let mainLines = Array(lines[..<reasoningStartIndex])
             
-            // 添加当前行到段落
-            currentSegment.append(line)
-            
-            // 处理代码块
-            if trimmedLine.hasPrefix("```") {
-                if inCodeBlock {
-                    inCodeBlock = false
-                    finalizeCurrentSegment()
-                } else {
-                    inCodeBlock = true
+            // 处理推理过程部分
+            var currentReasoningSegment: [String] = []
+            for line in reasoningLines {
+                currentReasoningSegment.append(line)
+                
+                if shouldStartNewSegment(line) {
+                    if !currentReasoningSegment.isEmpty {
+                        reasoningSegment.append(currentReasoningSegment.joined(separator: "\n"))
+                        currentReasoningSegment.removeAll()
+                    }
                 }
-                continue
+            }
+            if !currentReasoningSegment.isEmpty {
+                reasoningSegment.append(currentReasoningSegment.joined(separator: "\n"))
             }
             
-            // 处理数学公式块
-            if trimmedLine.hasPrefix("$$") {
-                if inMathBlock {
-                    inMathBlock = false
-                    finalizeCurrentSegment()
-                } else {
-                    inMathBlock = true
-                }
-                continue
-            }
-            
-            // 处理表格
-            if trimmedLine.contains("|") && trimmedLine.contains("-") {
-                if !inTable {
-                    inTable = true
-                }
-            } else if inTable && trimmedLine.isEmpty {
-                inTable = false
-                finalizeCurrentSegment()
-            }
-            
-            // 检查是否需要开始新段落
-            if !inCodeBlock && !inMathBlock && !inTable {
+            // 处理主要内容部分
+            for line in mainLines {
+                currentSegment.append(line)
+                
                 if shouldStartNewSegment(line) {
                     finalizeCurrentSegment()
                 }
             }
-            
-            // 处理最后一行
-            if index == lines.count - 1 {
-                if !currentSegment.isEmpty {
+            finalizeCurrentSegment()
+        } else {
+            // 如果没有找到推理过程，则按原样处理
+            for line in lines {
+                currentSegment.append(line)
+                
+                if shouldStartNewSegment(line) {
                     finalizeCurrentSegment()
                 }
             }
+            finalizeCurrentSegment()
         }
         
-        // 打印最终分段信息
+        // 合并推理部分和主要内容（推理部分在前）
+        var finalSegments = reasoningSegment
+        finalSegments.append(contentsOf: mainSegments)
+        
         print("\n最终分段结果:")
-        print("总分段数量: \(segments.count)")
-        print("原始内容总长度: \(content.count)")
-        print("分段后总长度: \(segments.map { $0.count }.reduce(0, +))")
-        segments.enumerated().forEach { index, segment in
-            print("\n第\(index + 1)段:")
-            print("长度: \(segment.count)")
-            print("行数: \(segment.components(separatedBy: .newlines).count)")
-            print("完整内容：\n\(segment)")
-            print("---")
-        }
+        print("推理部分段数: \(reasoningSegment.count)")
+        print("主要内容段数: \(mainSegments.count)")
+        print("总分段数量: \(finalSegments.count)")
         
-        return segments
+        return finalSegments
     }
     
     private func generateImageForSegment(_ segment: String, index: Int, total: Int) async -> UIImage? {
