@@ -195,22 +195,44 @@ struct ImagePreviewView: View {
     
     private func generateImage() async {
         await MainActor.run {
-            // 首先处理内容，将推理过程移到后面
+            // 首先处理内容，将推理过程移到前面
             let segments = splitMarkdownContent(markdownContent)
-            let reorderedContent = segments.joined(separator: "\n\n")
+            let hasReasoningProcess = segments.first?.contains("推理过程") ?? false
             
             // 创建一个 UIHostingController 来托管 SwiftUI 视图
             let hostingController = UIHostingController(rootView: 
                 VStack(alignment: .leading, spacing: 0) {
-                    MessageContentView(content: reorderedContent)
-                        .padding(.horizontal, 50)
-                        .padding(.vertical, 80)
-                        .frame(maxWidth: UIScreen.main.bounds.width)
-                        .environment(\.colorScheme, .light)  // 强制使用浅色模式
+                    ForEach(segments.indices, id: \.self) { index in
+                        let isReasoningSection = index == 0 && hasReasoningProcess
+                        
+                        VStack(alignment: .leading, spacing: 0) {
+                            if isReasoningSection {
+                                // 推理过程部分的样式
+                                MessageContentView(content: segments[index])
+                                    .padding(.horizontal, 50)
+                                    .padding(.vertical, 40)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(UIColor.systemGray6))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                    )
+                            } else {
+                                // 主要内容部分的样式
+                                MessageContentView(content: segments[index])
+                                    .padding(.horizontal, 50)
+                                    .padding(.vertical, 40)
+                            }
+                        }
+                        .padding(.bottom, isReasoningSection ? 20 : 0)
+                    }
                 }
-                .background(.white)  // 统一使用白色背景
-                .cornerRadius(12)
-                .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                .padding(.vertical, 40)
+                .frame(maxWidth: UIScreen.main.bounds.width)
+                .background(.white)
+                .environment(\.colorScheme, .light)
             )
             
             // 添加到临时窗口以确保正确布局
