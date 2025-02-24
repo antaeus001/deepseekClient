@@ -258,7 +258,7 @@ struct ImagePreviewView: View {
                                 // 推理过程部分的样式
                                 VStack(alignment: .leading, spacing: 12) {
                                     // 标题部分
-                                    if segments[index].contains("推理过程") || segments[index].contains("思考过程") {
+                                    if segments[index].hasPrefix("推理过程：") {
                                         HStack {
                                             Image(systemName: "brain")
                                                 .foregroundColor(.blue)
@@ -267,10 +267,14 @@ struct ImagePreviewView: View {
                                                 .foregroundColor(.blue)
                                         }
                                         .padding(.bottom, 4)
+                                        
+                                        // 去掉开头部分的内容
+                                        let contentWithoutPrefix = String(segments[index].dropFirst("推理过程：".count))
+                                        MessageContentView(content: contentWithoutPrefix)
+                                    } else {
+                                        // 内容部分
+                                        MessageContentView(content: segments[index])
                                     }
-                                    
-                                    // 内容部分
-                                    MessageContentView(content: segments[index])
                                 }
                                 .padding(.horizontal, 50)
                                 .padding(.vertical, 40)
@@ -385,7 +389,7 @@ struct ImagePreviewView: View {
             
             // 计算总图片数
             var totalImages = 0
-            let hasReasoningProcess = segments.first?.contains("推理过程") ?? false
+            let hasReasoningProcess = segments.first?.hasPrefix("推理过程：") ?? false
             
             // 预计算总图片数
             for (index, segment) in segments.enumerated() {
@@ -596,7 +600,7 @@ struct ImagePreviewView: View {
                     // 推理过程部分的样式
                     VStack(alignment: .leading, spacing: 12) {
                         // 标题部分
-                        if segment.contains("推理过程") || segment.contains("思考过程") {
+                        if segment.hasPrefix("推理过程：") {
                             HStack {
                                 Image(systemName: "brain")
                                     .foregroundColor(.blue)
@@ -605,10 +609,13 @@ struct ImagePreviewView: View {
                                     .foregroundColor(.blue)
                             }
                             .padding(.bottom, 4)
+                            // 去掉开头部分的内容
+                            let contentWithoutPrefix = String(segment.dropFirst("推理过程：".count))
+                            MessageContentView(content: contentWithoutPrefix)
+                        }else{
+                            // 内容部分
+                            MessageContentView(content: segment)
                         }
-                        
-                        // 内容部分
-                        MessageContentView(content: segment)
                     }
                     .padding(.horizontal, 50)
                     .padding(.vertical, 40)
