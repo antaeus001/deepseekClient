@@ -26,6 +26,7 @@ struct ChatView: View {
     @State private var scrollViewHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
     @State private var previewData: ImagePreviewData?  // 替换之前的 showImagePreview 和 previewContent
+    @State private var showCopyToast = false  // 添加这一行
     
     init(chat: Chat? = nil, isNewChat: Bool = false, resetTrigger: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
@@ -144,30 +145,64 @@ struct ChatView: View {
                                             .prefix(while: { $0.id != message.id })
                                             .last { $0.role == .user }?.content
                                         
-                                        Button(action: {
-                                            // 获取完整的消息内容，包括推理内容
-                                            var fullContent = message.content
-                                            if let reasoningContent = message.reasoningContent {
-                                                fullContent += "\n\n推理过程：\n" + reasoningContent
+                                        HStack(spacing: 8) {  // 添加 HStack 来水平排列按钮
+                                            Button(action: {
+                                                // 获取完整的消息内容，包括推理内容
+                                                var fullContent = message.content
+                                                if let reasoningContent = message.reasoningContent {
+                                                    fullContent += "\n\n推理过程：\n" + reasoningContent
+                                                }
+                                                
+                                                // 创建预览数据
+                                                previewData = ImagePreviewData(
+                                                    content: fullContent,
+                                                    userQuestion: previousUserMessage
+                                                )
+                                            }) {
+                                                HStack {
+                                                    Image(systemName: "photo.on.rectangle.angled")
+                                                        .font(.system(size: 14))
+                                                    Text("生成图片")
+                                                        .font(.system(size: 14))
+                                                }
+                                                .foregroundColor(.blue)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(Color.blue.opacity(0.1))
+                                                .cornerRadius(8)
                                             }
                                             
-                                            // 创建预览数据
-                                            previewData = ImagePreviewData(
-                                                content: fullContent,
-                                                userQuestion: previousUserMessage
-                                            )
-                                        }) {
-                                            HStack {
-                                                Image(systemName: "photo.on.rectangle.angled")
-                                                    .font(.system(size: 14))
-                                                Text("生成图片")
-                                                    .font(.system(size: 14))
+                                            // 修改复制按钮
+                                            Button(action: {
+                                                // 获取完整的消息内容用于复制
+                                                var contentToCopy = message.content
+                                                if let reasoningContent = message.reasoningContent {
+                                                    contentToCopy = "推理过程：\n" + reasoningContent + "\n\n" + contentToCopy
+                                                }
+                                                UIPasteboard.general.string = contentToCopy
+                                                
+                                                // 显示提示并在1.5秒后自动隐藏
+                                                withAnimation {
+                                                    showCopyToast = true
+                                                }
+                                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                                    withAnimation {
+                                                        showCopyToast = false
+                                                    }
+                                                }
+                                            }) {
+                                                HStack {
+                                                    Image(systemName: "doc.on.doc")
+                                                        .font(.system(size: 14))
+                                                    Text("复制")
+                                                        .font(.system(size: 14))
+                                                }
+                                                .foregroundColor(.blue)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(Color.blue.opacity(0.1))
+                                                .cornerRadius(8)
                                             }
-                                            .foregroundColor(.blue)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color.blue.opacity(0.1))
-                                            .cornerRadius(8)
                                         }
                                         .padding(.leading, 46)
                                         // 使用 sheet 显示预览
@@ -338,6 +373,23 @@ struct ChatView: View {
             isInputFocused = false
             visibleMessageIds.removeAll()
         }
+        .overlay(
+            Group {
+                if showCopyToast {
+                    VStack {
+                        Spacer()
+                        Text("复制成功")
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.75))
+                            .cornerRadius(8)
+                            .padding(.bottom, 100)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+        )
     }
     
     private func scrollToBottom(animated: Bool = true) {
