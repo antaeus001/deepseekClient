@@ -1,5 +1,12 @@
 import SwiftUI
 
+// 首先添加一个预览数据结构
+struct ImagePreviewData: Identifiable {
+    let id = UUID()
+    let content: String
+    let userQuestion: String?
+}
+
 struct ChatView: View {
     let chat: Chat?  // 可选，因为新会话时为 nil
     let isNewChat: Bool
@@ -18,8 +25,7 @@ struct ChatView: View {
     @State private var scrollViewContentHeight: CGFloat = 0
     @State private var scrollViewHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
-    @State private var showImagePreview = false
-    @State private var previewContent: String?  // 使用可选字符串替代之前的状态变量
+    @State private var previewData: ImagePreviewData?  // 替换之前的 showImagePreview 和 previewContent
     
     init(chat: Chat? = nil, isNewChat: Bool = false, resetTrigger: Bool = false, onChatCreated: ((Chat?) -> Void)? = nil) {
         self.chat = chat
@@ -133,14 +139,23 @@ struct ChatView: View {
                                         }
                                     
                                     if message.role == .assistant {
+                                        // 找到当前消息之前的最后一条用户消息
+                                        let previousUserMessage = viewModel.messages
+                                            .prefix(while: { $0.id != message.id })
+                                            .last { $0.role == .user }?.content
+                                        
                                         Button(action: {
                                             // 获取完整的消息内容，包括推理内容
                                             var fullContent = message.content
                                             if let reasoningContent = message.reasoningContent {
                                                 fullContent += "\n\n推理过程：\n" + reasoningContent
                                             }
-                                            // 直接设置预览内容
-                                            previewContent = fullContent
+                                            
+                                            // 创建预览数据
+                                            previewData = ImagePreviewData(
+                                                content: fullContent,
+                                                userQuestion: previousUserMessage
+                                            )
                                         }) {
                                             HStack {
                                                 Image(systemName: "photo.on.rectangle.angled")
@@ -155,9 +170,12 @@ struct ChatView: View {
                                             .cornerRadius(8)
                                         }
                                         .padding(.leading, 46)
-                                        // 使用 item 形式的 sheet
-                                        .sheet(item: $previewContent) { content in
-                                            ImagePreviewView(markdownContent: content)
+                                        // 使用 sheet 显示预览
+                                        .sheet(item: $previewData) { data in
+                                            ImagePreviewView(
+                                                markdownContent: data.content,
+                                                userContent: data.userQuestion
+                                            )
                                         }
                                     }
                                 }

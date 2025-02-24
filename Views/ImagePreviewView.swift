@@ -3,6 +3,7 @@ import Photos
 
 struct ImagePreviewView: View {
     let markdownContent: String
+    let userContent: String?
     @Environment(\.dismiss) private var dismiss
     @State private var generatedImage: UIImage?
     @Environment(\.colorScheme) private var colorScheme
@@ -15,16 +16,40 @@ struct ImagePreviewView: View {
     // 创建一个独立的视图来处理 markdown 内容
     private let contentView: MessageContentView
     
-    init(markdownContent: String) {
+    init(markdownContent: String, userContent: String? = nil) {
         print("ImagePreviewView 初始化，内容长度：\(markdownContent.count)")  // 添加日志
         self.markdownContent = markdownContent
+        self.userContent = userContent
         self.contentView = MessageContentView(content: markdownContent)
     }
     
-    // 添加一个视图构建器来创建预览内容
+    // 修改预览内容视图构建器
     @ViewBuilder
     private var previewContent: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 添加用户问题标题
+            if let userContent = userContent {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("问题")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.gray)
+                    
+                    Text(userContent)
+                        .font(.system(size: 15))
+                        .foregroundColor(.black)
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 50)
+                .padding(.vertical, 20)
+                .padding(.bottom, 10)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color.gray.opacity(0.2)),
+                    alignment: .bottom
+                )
+            }
+            
             contentView
                 .padding(.horizontal, 50)
                 .padding(.vertical, 80)
@@ -202,6 +227,29 @@ struct ImagePreviewView: View {
             // 创建一个 UIHostingController 来托管 SwiftUI 视图
             let hostingController = UIHostingController(rootView: 
                 VStack(alignment: .leading, spacing: 0) {
+                    // 添加用户问题标题
+                    if let userContent = userContent {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("问题")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.gray)
+                            
+                            Text(userContent)
+                                .font(.system(size: 15))
+                                .foregroundColor(.black)
+                                .lineLimit(2)
+                        }
+                        .padding(.horizontal, 50)
+                        .padding(.vertical, 20)
+                        .padding(.bottom, 10)
+                        .overlay(
+                            Rectangle()
+                                .frame(height: 1)
+                                .foregroundColor(Color.gray.opacity(0.2)),
+                            alignment: .bottom
+                        )
+                    }
+                    
                     ForEach(segments.indices, id: \.self) { index in
                         let isReasoningSection = index == 0 && hasReasoningProcess
                         
@@ -521,6 +569,29 @@ struct ImagePreviewView: View {
         return await MainActor.run {
             // 创建该段落的预览内容
             let segmentContent = VStack(alignment: .leading, spacing: 16) {
+                // 只在第一个分段显示用户问题
+                if index == 0, let userContent = userContent {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("问题")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.gray)
+                        
+                        Text(userContent)
+                            .font(.system(size: 15))
+                            .foregroundColor(.black)
+                            .lineLimit(2)
+                    }
+                    .padding(.horizontal, 50)
+                    .padding(.vertical, 20)
+                    .padding(.bottom, 10)
+                    .overlay(
+                        Rectangle()
+                            .frame(height: 1)
+                            .foregroundColor(Color.gray.opacity(0.2)),
+                        alignment: .bottom
+                    )
+                }
+                
                 if isReasoning {
                     // 推理过程部分的样式
                     VStack(alignment: .leading, spacing: 12) {
