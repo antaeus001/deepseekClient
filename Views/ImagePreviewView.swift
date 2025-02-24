@@ -286,34 +286,9 @@ struct ImagePreviewView: View {
             let targetWidth = image.size.width
             
             // 为每个分段生成图片
-            for segment in segments {
-                if let originalImage = await generateImageForSegment(segment) {
-                    // 使用原始图片的实际高度
-                    let targetHeight = originalImage.size.height
-                    
-                    UIGraphicsBeginImageContextWithOptions(CGSize(width: targetWidth, height: targetHeight), true, UIScreen.main.scale)
-                    
-                    // 填充白色背景
-                    UIColor.white.setFill()
-                    UIRectFill(CGRect(origin: .zero, size: CGSize(width: targetWidth, height: targetHeight)))
-                    
-                    // 计算缩放比例
-                    let scale = targetWidth / originalImage.size.width
-                    let scaledHeight = originalImage.size.height * scale
-                    
-                    // 绘制原始图片
-                    originalImage.draw(in: CGRect(
-                        x: 0,
-                        y: 0,
-                        width: targetWidth,
-                        height: scaledHeight
-                    ))
-                    
-                    if let finalImage = UIGraphicsGetImageFromCurrentImageContext() {
-                        slicedImages.append(finalImage)
-                    }
-                    
-                    UIGraphicsEndImageContext()
+            for (index, segment) in segments.enumerated() {
+                if let originalImage = await generateImageForSegment(segment, index: index, total: segments.count) {
+                    slicedImages.append(originalImage)
                 }
             }
             
@@ -434,7 +409,7 @@ struct ImagePreviewView: View {
         return segments
     }
     
-    private func generateImageForSegment(_ segment: String) async -> UIImage? {
+    private func generateImageForSegment(_ segment: String, index: Int, total: Int) async -> UIImage? {
         return await MainActor.run {
             // 创建该段落的预览内容
             let segmentContent = VStack(alignment: .leading, spacing: 16) {
@@ -520,6 +495,21 @@ struct ImagePreviewView: View {
                 y: finalSize.height - watermarkSize.height - 16 // 距离底部 16 点
             )
             watermark.draw(at: watermarkPoint, withAttributes: attributes)
+            
+            // 添加序号水印
+            let pageNumber = "\(index + 1)/\(total)"
+            let pageAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 14, weight: .medium),
+                .foregroundColor: UIColor.gray.withAlphaComponent(0.8)
+            ]
+            let pageSize = pageNumber.size(withAttributes: pageAttributes)
+            
+            // 在右下角绘制序号
+            let pagePoint = CGPoint(
+                x: finalSize.width - pageSize.width - 20,
+                y: finalSize.height - pageSize.height - 16
+            )
+            pageNumber.draw(at: pagePoint, withAttributes: pageAttributes)
             
             // 获取生成的图片
             let image = UIGraphicsGetImageFromCurrentImageContext()
