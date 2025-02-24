@@ -208,17 +208,32 @@ struct ImagePreviewView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             if isReasoningSection {
                                 // 推理过程部分的样式
-                                MessageContentView(content: segments[index])
-                                    .padding(.horizontal, 50)
-                                    .padding(.vertical, 40)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color(UIColor.systemGray6))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                    )
+                                VStack(alignment: .leading, spacing: 12) {
+                                    // 标题部分
+                                    if segments[index].contains("推理过程") || segments[index].contains("思考过程") {
+                                        HStack {
+                                            Image(systemName: "brain")
+                                                .foregroundColor(.blue)
+                                            Text("推理过程")
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundColor(.blue)
+                                        }
+                                        .padding(.bottom, 4)
+                                    }
+                                    
+                                    // 内容部分
+                                    MessageContentView(content: segments[index])
+                                }
+                                .padding(.horizontal, 50)
+                                .padding(.vertical, 40)
+                                .overlay(
+                                    // 左侧装饰条
+                                    Rectangle()
+                                        .fill(Color.blue.opacity(0.6))
+                                        .frame(width: 4)
+                                        .padding(.vertical, 20),
+                                    alignment: .leading
+                                )
                             } else {
                                 // 主要内容部分的样式
                                 MessageContentView(content: segments[index])
@@ -508,17 +523,32 @@ struct ImagePreviewView: View {
             let segmentContent = VStack(alignment: .leading, spacing: 16) {
                 if isReasoning {
                     // 推理过程部分的样式
-                    MessageContentView(content: segment)
-                        .padding(.horizontal, 50)
-                        .padding(.vertical, 40)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(UIColor.systemGray6))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                        )
+                    VStack(alignment: .leading, spacing: 12) {
+                        // 标题部分
+                        if segment.contains("推理过程") || segment.contains("思考过程") {
+                            HStack {
+                                Image(systemName: "brain")
+                                    .foregroundColor(.blue)
+                                Text("推理过程")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.blue)
+                            }
+                            .padding(.bottom, 4)
+                        }
+                        
+                        // 内容部分
+                        MessageContentView(content: segment)
+                    }
+                    .padding(.horizontal, 50)
+                    .padding(.vertical, 40)
+                    .overlay(
+                        // 左侧装饰条
+                        Rectangle()
+                            .fill(Color.blue.opacity(0.6))
+                            .frame(width: 4)
+                            .padding(.vertical, 20),
+                        alignment: .leading
+                    )
                 } else {
                     // 普通内容的样式
                     MessageContentView(content: segment)
