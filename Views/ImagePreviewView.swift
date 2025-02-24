@@ -242,11 +242,26 @@ struct ImagePreviewView: View {
             UIColor.white.setFill()
             UIRectFill(CGRect(origin: .zero, size: finalSize))
             
-            // 确保视图背景是透明的
-            view.backgroundColor = .clear
+            // 确保视图背景是白色
+            view.backgroundColor = .white
             
             // 渲染视图层级
             view.layer.render(in: UIGraphicsGetCurrentContext()!)
+            
+            // 添加水印
+            let watermark = "AI Client APP"
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 12, weight: .regular),
+                .foregroundColor: UIColor.gray.withAlphaComponent(0.6)
+            ]
+            let watermarkSize = watermark.size(withAttributes: attributes)
+            
+            // 在底部居中绘制水印
+            let watermarkPoint = CGPoint(
+                x: (finalSize.width - watermarkSize.width) / 2,
+                y: finalSize.height - watermarkSize.height - 16 // 距离底部 16 点
+            )
+            watermark.draw(at: watermarkPoint, withAttributes: attributes)
             
             // 获取生成的图片
             if let image = UIGraphicsGetImageFromCurrentImageContext() {
@@ -485,11 +500,26 @@ struct ImagePreviewView: View {
             UIColor.white.setFill()
             UIRectFill(CGRect(origin: .zero, size: finalSize))
             
-            // 确保视图背景是透明的
-            view.backgroundColor = .white  // 改为白色背景
+            // 确保视图背景是白色
+            view.backgroundColor = .white
             
             // 渲染视图层级
             view.layer.render(in: UIGraphicsGetCurrentContext()!)
+            
+            // 添加水印
+            let watermark = "AI Client APP"
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 12, weight: .regular),
+                .foregroundColor: UIColor.gray.withAlphaComponent(0.6)
+            ]
+            let watermarkSize = watermark.size(withAttributes: attributes)
+            
+            // 在底部居中绘制水印
+            let watermarkPoint = CGPoint(
+                x: (finalSize.width - watermarkSize.width) / 2,
+                y: finalSize.height - watermarkSize.height - 16 // 距离底部 16 点
+            )
+            watermark.draw(at: watermarkPoint, withAttributes: attributes)
             
             // 获取生成的图片
             let image = UIGraphicsGetImageFromCurrentImageContext()
