@@ -108,9 +108,23 @@ class ChatViewModel: ObservableObject {
             )
             messages.append(responseMessage)
             
+            // 构建消息历史
+            var messageHistory: [[String: String]] = []
+            for message in messages {
+                // 跳过当前正在创建的响应消息和失败的消息
+                if message.id == responseMessage.id || message.status == .failed {
+                    continue
+                }
+                messageHistory.append([
+                    "role": message.role == .user ? "user" : "assistant",
+                    "content": message.content
+                ])
+            }
+            
             var accumulatedContent = ""
             var accumulatedReasoning = ""
-            let stream = try await deepSeekService.sendMessage(content, chatId: currentChat.id)
+            // 发送请求时包含消息历史
+            let stream = try await deepSeekService.sendMessage(content, chatId: currentChat.id, history: messageHistory)
             
             for try await (text, reasoning) in stream {
                 if let index = messages.lastIndex(where: { $0.id == responseMessage.id }) {

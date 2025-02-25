@@ -22,11 +22,10 @@ class DeepSeekService {
         currentModel = isReasoner ? settings.reasonerModel : settings.chatModel
     }
     
-    func sendMessage(_ content: String, chatId: String) async throws -> AsyncThrowingStream<(String, String?), Error> {
-        let messages = [
-            // OpenAI 标准消息格式
-            ["role": "user", "content": content]
-        ]
+    func sendMessage(_ content: String, chatId: String, history: [[String: String]] = []) async throws -> AsyncThrowingStream<(String, String?), Error> {
+        // 合并历史消息和当前消息
+        var messages = history
+        messages.append(["role": "user", "content": content])
         
         let parameters: [String: Any] = [
             "model": currentModel,
@@ -41,6 +40,7 @@ class DeepSeekService {
         ]
         
         print("📤 发送请求: \(parameters)")
+        print("🔄 消息历史数量: \(messages.count)")
         
         guard let url = URL(string: "\(settings.apiEndpoint)/v1/chat/completions") else {
             print("❌ 无效的 URL: \(settings.apiEndpoint)/v1/chat/completions")

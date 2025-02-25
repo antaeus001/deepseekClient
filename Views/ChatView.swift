@@ -139,7 +139,7 @@ struct ChatView: View {
                                             visibleMessageIds.remove(message.id)
                                         }
                                     
-                                    if message.role == .assistant {
+                                    if message.role == .assistant && message.status != .streaming {
                                         // 找到当前消息之前的最后一条用户消息
                                         let previousUserMessage = viewModel.messages
                                             .prefix(while: { $0.id != message.id })
