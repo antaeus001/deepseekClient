@@ -461,61 +461,111 @@ struct ImagePreviewView: View {
         
         while index < lines.count {
             let line = lines[index]
-            currentSegment.append(line)
-            let currentContent = currentSegment.joined(separator: "\n")
             
-            // 检查当前内容生成的图片高度
-            let fittingHeight = await calculateContentHeight(
-                currentContent, 
-                width: targetSize.width, 
-                isReasoning: isReasoning,
-                isFirstSegment: isFirst
-            )
-            
-            if fittingHeight > targetSize.height * 0.85 {
-                if currentSegment.count > 1 {
-                    // 回退一行
-                    currentSegment.removeLast()
-                    index -= 1 // 回退索引，下一次循环会重新处理这一行
+            // 检测代码块的开始
+            if line.hasPrefix("```") && line.count > 3 {
+                // 检查是否是真正的代码块（必须包含语言标识符）
+                let languageIdentifier = line.dropFirst(3).trimmingCharacters(in: .whitespaces)
+                let isValidLanguage = languageIdentifier.range(of: "^[a-zA-Z0-9]+$", options: .regularExpression) != nil
+                
+                // 只有当语言标识符是有效的编程语言时才处理为代码块
+                if !languageIdentifier.isEmpty && isValidLanguage {
+                    // 先检查当前代码块的大小
+                    var codeBlockLines = [line]
+                    var tempIndex = index + 1
+                    var foundEnd = false
                     
-                    // 保存当前段落
-                    let segment = currentSegment.joined(separator: "\n")
-                    if !segment.isEmpty {
-                        segments.append(segment)
-                        isFirst = false
+                    // 收集代码块内容直到找到结束标记
+                    while tempIndex < lines.count {
+                        let codeLine = lines[tempIndex]
+                        codeBlockLines.append(codeLine)
+                        if codeLine.trimmingCharacters(in: .whitespaces) == "```" {
+                            foundEnd = true
+                            break
+                        }
+                        tempIndex += 1
                     }
                     
-                    // 开始新的段落
-                    currentSegment = []
+                    if foundEnd {
+                        // 检查当前内容加上代码块的高度是否超出
+                        let testContent = currentSegment + codeBlockLines
+                        let testContentStr = testContent.joined(separator: "\n")
+                        let fittingHeight = await calculateContentHeight(
+                            testContentStr,
+                            width: targetSize.width,
+                            isReasoning: isReasoning,
+                            isFirstSegment: isFirst
+                        )
+                        
+                        if fittingHeight > targetSize.height * 0.85 {
+                            // 如果超出，先保存当前段落
+                            if !currentSegment.isEmpty {
+                                let segment = currentSegment.joined(separator: "\n")
+                                segments.append(segment)
+                                currentSegment = []
+                                isFirst = false
+                            }
+                            // 然后将代码块作为新的段落
+                            currentSegment = codeBlockLines
+                        } else {
+                            // 如果没超出，直接添加代码块到当前段落
+                            currentSegment.append(contentsOf: codeBlockLines)
+                        }
+                        
+                        index = tempIndex + 1
+                        continue
+                    }
                 } else {
-                    // 如果只有一行，需要强制分段
-                    // 先保存当前行
-                    segments.append(line)
-                    isFirst = false
-                    currentSegment = []
-                    
-                    // 继续处理下一行
+                    // 不是有效的代码块，作为普通文本处理
+                    currentSegment.append(line)
                     index += 1
+                    continue
                 }
             } else {
-                // 内容未超出，继续添加下一行
-                index += 1
+                // 处理普通内容
+                currentSegment.append(line)
+                let currentContent = currentSegment.joined(separator: "\n")
                 
-                // 如果是最后一行或者已经处理完所有行，保存当前段落
-                if index >= lines.count {
-                    let segment = currentSegment.joined(separator: "\n")
-                    if !segment.isEmpty {
+                // 检查当前内容高度
+                let fittingHeight = await calculateContentHeight(
+                    currentContent,
+                    width: targetSize.width,
+                    isReasoning: isReasoning,
+                    isFirstSegment: isFirst
+                )
+                
+                if fittingHeight > targetSize.height * 0.85 {
+                    if currentSegment.count > 1 {
+                        // 回退一行
+                        currentSegment.removeLast()
+                        index -= 1
+                        
+                        // 保存当前段落
+                        let segment = currentSegment.joined(separator: "\n")
+                        if !segment.isEmpty {
+                            segments.append(segment)
+                            isFirst = false
+                        }
+                        
+                        // 开始新的段落
+                        currentSegment = []
+                    } else {
+                        // 如果只有一行，需要强制分段
+                        segments.append(line)
+                        isFirst = false
+                        currentSegment = []
+                        index += 1
+                    }
+                } else {
+                    // 内容未超出，继续添加下一行
+                    index += 1
+                    
+                    // 如果是最后一行，保存当前段落
+                    if index >= lines.count && !currentSegment.isEmpty {
+                        let segment = currentSegment.joined(separator: "\n")
                         segments.append(segment)
                     }
                 }
-            }
-        }
-        
-        // 确保没有遗漏的内容
-        if !currentSegment.isEmpty {
-            let finalSegment = currentSegment.joined(separator: "\n")
-            if !finalSegment.isEmpty && !segments.contains(finalSegment) {
-                segments.append(finalSegment)
             }
         }
         
@@ -708,16 +758,15 @@ struct ImagePreviewView: View {
                             
                             // 去掉开头部分的内容
                             let contentWithoutPrefix = String(segment.dropFirst("推理过程：".count))
-                            MessageContentView(content: contentWithoutPrefix)
+                            MessageContentViewWithCodeBlockTruncation(content: contentWithoutPrefix, maxHeight: targetSize.height * 0.7)
                         } else {
                             // 内容部分
-                            MessageContentView(content: segment)
+                            MessageContentViewWithCodeBlockTruncation(content: segment, maxHeight: targetSize.height * 0.7)
                         }
                     }
                     .padding(.horizontal, 50)
                     .padding(.vertical, 40)
                     .overlay(
-                        // 左侧装饰条
                         Rectangle()
                             .fill(Color.blue.opacity(0.6))
                             .frame(width: 4)
@@ -726,12 +775,12 @@ struct ImagePreviewView: View {
                     )
                 } else {
                     // 普通内容的样式
-                    MessageContentView(content: segment)
+                    MessageContentViewWithCodeBlockTruncation(content: segment, maxHeight: targetSize.height * 0.7)
                         .padding(.horizontal, 50)
                         .padding(.vertical, 40)
                 }
             }
-            .frame(width: targetSize.width)
+            .frame(width: targetSize.width, height: targetSize.height)
             .background(.white)
             .environment(\.colorScheme, .light)
             
@@ -902,5 +951,94 @@ struct ToastView: View {
             .background(Color.black.opacity(0.8))
             .cornerRadius(20)
             .padding(.bottom, 40)
+    }
+}
+
+// 添加一个新的视图组件来处理代码块的截断
+struct MessageContentViewWithCodeBlockTruncation: View {
+    let content: String
+    let maxHeight: CGFloat
+    
+    var body: some View {
+        let processedContent = processContent()
+        return MessageContentView(content: processedContent)
+    }
+    
+    private func processContent() -> String {
+        let lines = content.components(separatedBy: .newlines)
+        var currentLines: [String] = []
+        var inCodeBlock = false
+        var codeBlockLanguage: String? = nil
+        var index = 0
+        
+        while index < lines.count {
+            let line = lines[index]
+            
+            // 检测代码块的开始和结束
+            if line.hasPrefix("```") {
+                if !inCodeBlock {
+                    // 检查是否是真正的代码块开始
+                    let languageIdentifier = line.dropFirst(3).trimmingCharacters(in: .whitespaces)
+                    let isValidLanguage = languageIdentifier.range(of: "^[a-zA-Z0-9]+$", options: .regularExpression) != nil
+                    
+                    if !languageIdentifier.isEmpty && isValidLanguage {
+                        inCodeBlock = true
+                        codeBlockLanguage = languageIdentifier
+                    }
+                } else if line.trimmingCharacters(in: .whitespaces) == "```" {
+                    inCodeBlock = false
+                    codeBlockLanguage = nil
+                }
+            }
+            
+            currentLines.append(line)
+            
+            // 检查当前内容高度
+            let currentContent = currentLines.joined(separator: "\n")
+            let contentHeight = calculateContentHeight(currentContent)
+            
+            if contentHeight > maxHeight {
+                if inCodeBlock {
+                    // 如果在代码块内超出高度，保留已经添加的内容
+                    currentLines.removeLast() // 移除最后一行
+                    if !currentLines.isEmpty {
+                        currentLines.append("```") // 添加代码块结束标记
+                        currentLines.append("... 更多代码已省略 ...") // 添加提示信息
+                    }
+                    break
+                } else {
+                    // 非代码块内容超出，回退一行并添加省略号
+                    currentLines.removeLast()
+                    if !currentLines.isEmpty {
+                        currentLines.append("...")
+                    }
+                    break
+                }
+            }
+            
+            index += 1
+        }
+        
+        return currentLines.joined(separator: "\n")
+    }
+    
+    private func calculateContentHeight(_ content: String) -> CGFloat {
+        let contentView = MessageContentView(content: content)
+            .frame(width: UIScreen.main.bounds.width - 100) // 考虑左右padding
+        
+        let controller = UIHostingController(rootView: contentView)
+        let view = controller.view!
+        
+        view.frame = CGRect(origin: .zero, size: CGSize(width: UIScreen.main.bounds.width - 100, height: UIView.layoutFittingExpandedSize.height))
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        
+        let fittingSize = view.systemLayoutSizeFitting(
+            CGSize(width: UIScreen.main.bounds.width - 100, height: UIView.layoutFittingExpandedSize.height),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        )
+        
+        return fittingSize.height
     }
 } 
