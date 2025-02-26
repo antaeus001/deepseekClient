@@ -357,8 +357,7 @@ struct ChatView: View {
         .onChange(of: isNewChat) { newValue in
             if newValue {
                 // 如果切换到新会话模式，重置 ViewModel
-                viewModel.reset()
-                inputText = ""
+                handleNewChat()
             }
         }
         .onChange(of: chat) { newChat in
@@ -390,6 +389,10 @@ struct ChatView: View {
                 }
             }
         )
+        .onReceive(NotificationCenter.default.publisher(for: .resetChatView)) { _ in
+            // 收到重置通知时，调用重置方法
+            handleNewChat()
+        }
     }
     
     private func scrollToBottom(animated: Bool = true) {
@@ -442,6 +445,15 @@ struct ChatView: View {
             inputText = ""
             isInputFocused = false
         }
+    }
+    
+    // 在 ChatView 中添加一个新的方法来处理新会话
+    func handleNewChat() {
+        // 重置当前会话
+        viewModel.reset()
+        inputText = ""
+        isInputFocused = false
+        visibleMessageIds.removeAll()
     }
 }
 
