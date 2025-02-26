@@ -382,55 +382,46 @@ struct ImagePreviewView: View {
     
     private func sliceImage(_ image: UIImage) {
         Task {
-            // 首先分割 markdown 内容
             let segments = splitMarkdownContent(markdownContent)
             var slicedImages: [UIImage] = []
             var currentIndex = 0
             
-            // 计算总图片数
-            var totalImages = 0
-            let hasReasoningProcess = segments.first?.hasPrefix("推理过程：") ?? false
+            // 计算目标尺寸
+            let targetWidth = UIScreen.main.bounds.width
+            let targetHeight = targetWidth * 4/3 // 3:4 比例
             
-            // 预计算总图片数
             for (index, segment) in segments.enumerated() {
-                let isReasoningSection = index == 0 && hasReasoningProcess
-                if isReasoningSection && segment.count > 400 {
-                    totalImages += splitReasoningContent(segment).count
-                } else {
-                    totalImages += 1
-                }
-            }
-            
-            // 使用原始图片的宽度
-            let targetWidth = image.size.width
-            
-            // 生成切片图片
-            for (index, segment) in segments.enumerated() {
-                let isReasoningSection = index == 0 && hasReasoningProcess
+                let isReasoningSection = index == 0 && (segment.hasPrefix("推理过程：") || segment.hasPrefix("思考过程："))
                 
-                // 如果是推理过程部分且内容较长，进行二次分段
-                if isReasoningSection && segment.count > 400 {
-                    // 将推理过程部分再次分段
-                    let reasoningSubSegments = splitReasoningContent(segment)
-                    for subSegment in reasoningSubSegments {
-                        if let originalImage = await generateImageForSegment(
+                // 如果内容较长，进行动态分段
+                if segment.count > 200 {
+                    let subSegments = await dynamicSplitContent(
+                        segment,
+                        targetSize: CGSize(width: targetWidth, height: targetHeight),
+                        isReasoning: isReasoningSection
+                    )
+                    
+                    for subSegment in subSegments {
+                        if let slicedImage = await generateImageForSegment(
                             subSegment,
                             index: currentIndex,
-                            total: totalImages,
-                            isReasoning: true
+                            total: segments.count,
+                            targetSize: CGSize(width: targetWidth, height: targetHeight),
+                            isReasoning: isReasoningSection
                         ) {
-                            slicedImages.append(originalImage)
+                            slicedImages.append(slicedImage)
                             currentIndex += 1
                         }
                     }
                 } else {
-                    if let originalImage = await generateImageForSegment(
+                    if let slicedImage = await generateImageForSegment(
                         segment,
                         index: currentIndex,
-                        total: totalImages,
+                        total: segments.count,
+                        targetSize: CGSize(width: targetWidth, height: targetHeight),
                         isReasoning: isReasoningSection
                     ) {
-                        slicedImages.append(originalImage)
+                        slicedImages.append(slicedImage)
                         currentIndex += 1
                     }
                 }
@@ -443,125 +434,34 @@ struct ImagePreviewView: View {
         }
     }
     
-    private func splitMarkdownContent(_ content: String) -> [String] {
-        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("\n原始内容长度: \(content.count)")
-        print("处理后内容长度: \(trimmedContent.count)")
-        
-        // 将内容按行分割
+    private func dynamicSplitContent(_ content: String, targetSize: CGSize, isReasoning: Bool) async -> [String] {
+        var segments: [String] = []
         let lines = content.components(separatedBy: .newlines)
-        var mainSegments: [String] = []
-        var reasoningSegment: [String] = []
         var currentSegment: [String] = []
-        var inCodeBlock = false
-        var inMathBlock = false
-        var inTable = false
         
-        func shouldStartNewSegment(_ line: String) -> Bool {
-            let segmentContent = currentSegment.joined(separator: "\n")
-            let contentLength = segmentContent.count
-            return contentLength > 400
-        }
-        
-        func finalizeCurrentSegment() {
-            if !currentSegment.isEmpty {
-                let segment = currentSegment.joined(separator: "\n")
-                if !segment.isEmpty {
-                    mainSegments.append(segment)
-                }
-                currentSegment.removeAll()
-            }
-        }
-        
-        // 首先找到推理过程部分
-        var reasoningStartIndex: Int = -1
-        for (index, line) in lines.enumerated() {
-            if line.contains("推理过程") || line.contains("思考过程") {
-                reasoningStartIndex = index
-                break
-            }
-        }
-        
-        if reasoningStartIndex != -1 {
-            // 将推理过程部分提取出来
-            let reasoningLines = Array(lines[reasoningStartIndex...])
-            // 将剩余部分作为主要内容
-            let mainLines = Array(lines[..<reasoningStartIndex])
+        for line in lines {
+            currentSegment.append(line)
+            let currentContent = currentSegment.joined(separator: "\n")
             
-            // 处理推理过程部分
-            var currentReasoningSegment: [String] = []
-            for line in reasoningLines {
-                currentReasoningSegment.append(line)
-                
-                if shouldStartNewSegment(line) {
-                    if !currentReasoningSegment.isEmpty {
-                        reasoningSegment.append(currentReasoningSegment.joined(separator: "\n"))
-                        currentReasoningSegment.removeAll()
+            // 检查当前内容生成的图片高度是否超过目标高度
+            if let testImage = await generateTestImage(currentContent, targetSize: targetSize, isReasoning: isReasoning) {
+                if testImage.size.height > targetSize.height {
+                    // 如果超过目标高度，保存之前的段落
+                    if currentSegment.count > 1 {
+                        let previousSegment = Array(currentSegment.dropLast())
+                        segments.append(previousSegment.joined(separator: "\n"))
+                        // 开始新的段落，从当前行开始
+                        currentSegment = [line]
+                    } else {
+                        // 如果单行就超过了，强制分段
+                        segments.append(currentContent)
+                        currentSegment = []
                     }
                 }
             }
-            if !currentReasoningSegment.isEmpty {
-                reasoningSegment.append(currentReasoningSegment.joined(separator: "\n"))
-            }
-            
-            // 处理主要内容部分
-            for line in mainLines {
-                currentSegment.append(line)
-                
-                if shouldStartNewSegment(line) {
-                    finalizeCurrentSegment()
-                }
-            }
-            finalizeCurrentSegment()
-        } else {
-            // 如果没有找到推理过程，则按原样处理
-            for line in lines {
-                currentSegment.append(line)
-                
-                if shouldStartNewSegment(line) {
-                    finalizeCurrentSegment()
-                }
-            }
-            finalizeCurrentSegment()
         }
         
-        // 合并推理部分和主要内容（推理部分在前）
-        var finalSegments = reasoningSegment
-        finalSegments.append(contentsOf: mainSegments)
-        
-        print("\n最终分段结果:")
-        print("推理部分段数: \(reasoningSegment.count)")
-        print("主要内容段数: \(mainSegments.count)")
-        print("总分段数量: \(finalSegments.count)")
-        
-        return finalSegments
-    }
-    
-    private func splitReasoningContent(_ content: String) -> [String] {
-        let lines = content.components(separatedBy: .newlines)
-        var segments: [String] = []
-        var currentSegment: [String] = []
-        var currentLength = 0
-        
-        // 确保第一行（包含"推理过程"）总是在第一个分段中
-        if let firstLine = lines.first {
-            currentSegment.append(firstLine)
-            currentLength = firstLine.count
-        }
-        
-        for line in lines.dropFirst() {
-            let lineLength = line.count
-            
-            if currentLength + lineLength > 400 && !currentSegment.isEmpty {
-                segments.append(currentSegment.joined(separator: "\n"))
-                currentSegment = []
-                currentLength = 0
-            }
-            
-            currentSegment.append(line)
-            currentLength += lineLength
-        }
-        
+        // 添加最后一个段落
         if !currentSegment.isEmpty {
             segments.append(currentSegment.joined(separator: "\n"))
         }
@@ -569,7 +469,68 @@ struct ImagePreviewView: View {
         return segments
     }
     
-    private func generateImageForSegment(_ segment: String, index: Int, total: Int, isReasoning: Bool = false) async -> UIImage? {
+    private func generateTestImage(_ content: String, targetSize: CGSize, isReasoning: Bool) async -> UIImage? {
+        return await MainActor.run {
+            let contentView = VStack(alignment: .leading, spacing: 16) {
+                if isReasoning {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "brain")
+                                .foregroundColor(.blue)
+                            Text("推理过程")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.blue)
+                        }
+                        .padding(.bottom, 4)
+                        
+                        MessageContentView(content: content)
+                    }
+                    .padding(.horizontal, 50)
+                    .padding(.vertical, 40)
+                    .overlay(
+                        Rectangle()
+                            .fill(Color.blue.opacity(0.6))
+                            .frame(width: 4)
+                            .padding(.vertical, 20),
+                        alignment: .leading
+                    )
+                } else {
+                    MessageContentView(content: content)
+                        .padding(.horizontal, 50)
+                        .padding(.vertical, 40)
+                }
+            }
+            .frame(width: targetSize.width)
+            .background(.white)
+            
+            let controller = UIHostingController(rootView: contentView)
+            let view = controller.view!
+            
+            // 设置初始大小
+            view.frame = CGRect(origin: .zero, size: CGSize(width: targetSize.width, height: UIView.layoutFittingExpandedSize.height))
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
+            
+            // 获取实际大小
+            let fittingSize = view.systemLayoutSizeFitting(
+                CGSize(width: targetSize.width, height: UIView.layoutFittingExpandedSize.height),
+                withHorizontalFittingPriority: .required,
+                verticalFittingPriority: .fittingSizeLevel
+            )
+            
+            // 创建图片上下文
+            UIGraphicsBeginImageContextWithOptions(fittingSize, true, UIScreen.main.scale)
+            defer { UIGraphicsEndImageContext() }
+            
+            view.frame = CGRect(origin: .zero, size: fittingSize)
+            view.backgroundColor = .white
+            view.layer.render(in: UIGraphicsGetCurrentContext()!)
+            
+            return UIGraphicsGetImageFromCurrentImageContext()
+        }
+    }
+    
+    private func generateImageForSegment(_ segment: String, index: Int, total: Int, targetSize: CGSize, isReasoning: Bool = false) async -> UIImage? {
         return await MainActor.run {
             // 创建该段落的预览内容
             let segmentContent = VStack(alignment: .leading, spacing: 16) {
@@ -609,10 +570,11 @@ struct ImagePreviewView: View {
                                     .foregroundColor(.blue)
                             }
                             .padding(.bottom, 4)
+                            
                             // 去掉开头部分的内容
                             let contentWithoutPrefix = String(segment.dropFirst("推理过程：".count))
                             MessageContentView(content: contentWithoutPrefix)
-                        }else{
+                        } else {
                             // 内容部分
                             MessageContentView(content: segment)
                         }
@@ -634,10 +596,10 @@ struct ImagePreviewView: View {
                         .padding(.vertical, 40)
                 }
             }
-            .frame(maxWidth: UIScreen.main.bounds.width)
+            .frame(width: targetSize.width)
             .background(.white)
             .environment(\.colorScheme, .light)
-
+            
             // 创建一个 UIHostingController 来托管 SwiftUI 视图
             let hostingController = UIHostingController(rootView: segmentContent)
             
@@ -649,34 +611,26 @@ struct ImagePreviewView: View {
             let view = hostingController.view!
             
             // 先设置一个临时的大小来获取实际内容高度
-            view.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: UIView.layoutFittingExpandedSize.height)
+            view.frame = CGRect(x: 0, y: 0, width: targetSize.width, height: UIView.layoutFittingExpandedSize.height)
             view.setNeedsLayout()
             view.layoutIfNeeded()
             
             // 获取实际内容大小
             let fittingSize = view.systemLayoutSizeFitting(
-                CGSize(width: UIScreen.main.bounds.width, height: UIView.layoutFittingExpandedSize.height),
+                CGSize(width: targetSize.width, height: UIView.layoutFittingExpandedSize.height),
                 withHorizontalFittingPriority: .required,
                 verticalFittingPriority: .fittingSizeLevel
             )
             
-            // 计算目标高度，确保不超过 4:3 比例
-            let targetWidth = fittingSize.width
-            let targetHeight = max(
-                fittingSize.height + 60, // 确保有足够的空间显示内容
-                targetWidth * (4.0/3.0)  // 保持最小 3:4 比例
-            )
-            
+            // 设置最终尺寸，确保不小于目标高度
             let finalSize = CGSize(
-                width: targetWidth,
-                height: targetHeight
+                width: targetSize.width,
+                height: max(targetSize.height, fittingSize.height)
             )
             
-            // 设置视图frame，居中显示内容
-            view.frame = CGRect(
-                origin: CGPoint(x: 0, y: (targetHeight - fittingSize.height) / 2), // 垂直居中
-                size: fittingSize
-            )
+            // 设置视图frame
+            view.frame = CGRect(origin: .zero, size: finalSize)
+            view.backgroundColor = .white
             
             // 强制布局
             view.setNeedsLayout()
@@ -689,9 +643,6 @@ struct ImagePreviewView: View {
             // 填充白色背景
             UIColor.white.setFill()
             UIRectFill(CGRect(origin: .zero, size: finalSize))
-            
-            // 确保视图背景是白色
-            view.backgroundColor = .white
             
             // 渲染视图层级
             view.layer.render(in: UIGraphicsGetCurrentContext()!)
@@ -707,7 +658,7 @@ struct ImagePreviewView: View {
             // 在底部居中绘制水印
             let watermarkPoint = CGPoint(
                 x: (finalSize.width - watermarkSize.width) / 2,
-                y: finalSize.height - watermarkSize.height - 16 // 距离底部 16 点
+                y: finalSize.height - watermarkSize.height - 16
             )
             watermark.draw(at: watermarkPoint, withAttributes: attributes)
             
@@ -726,7 +677,6 @@ struct ImagePreviewView: View {
             )
             pageNumber.draw(at: pagePoint, withAttributes: pageAttributes)
             
-            // 获取生成的图片
             let image = UIGraphicsGetImageFromCurrentImageContext()
             
             // 清理临时窗口
@@ -752,6 +702,54 @@ struct ImagePreviewView: View {
         }
         
         return blocks
+    }
+    
+    private func splitMarkdownContent(_ content: String) -> [String] {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        print("\n原始内容长度: \(content.count)")
+        print("处理后内容长度: \(trimmedContent.count)")
+        
+        // 将内容按行分割
+        let lines = content.components(separatedBy: .newlines)
+        var mainSegments: [String] = []
+        var reasoningSegment: [String] = []
+        var currentSegment: [String] = []
+        
+        // 首先找到推理过程部分
+        var reasoningStartIndex: Int = -1
+        for (index, line) in lines.enumerated() {
+            if line.contains("推理过程") || line.contains("思考过程") {
+                reasoningStartIndex = index
+                break
+            }
+        }
+        
+        if reasoningStartIndex != -1 {
+            // 将推理过程部分提取出来
+            let reasoningLines = Array(lines[reasoningStartIndex...])
+            // 将剩余部分作为主要内容
+            let mainLines = Array(lines[..<reasoningStartIndex])
+            
+            // 处理推理过程部分
+            reasoningSegment = [reasoningLines.joined(separator: "\n")]
+            
+            // 处理主要内容部分
+            mainSegments = [mainLines.joined(separator: "\n")]
+        } else {
+            // 如果没有找到推理过程，则整体作为一个段落
+            mainSegments = [lines.joined(separator: "\n")]
+        }
+        
+        // 合并推理部分和主要内容（推理部分在前）
+        var finalSegments = reasoningSegment
+        finalSegments.append(contentsOf: mainSegments)
+        
+        print("\n最终分段结果:")
+        print("推理部分段数: \(reasoningSegment.count)")
+        print("主要内容段数: \(mainSegments.count)")
+        print("总分段数量: \(finalSegments.count)")
+        
+        return finalSegments
     }
 }
 
