@@ -391,10 +391,27 @@ struct ImagePreviewView: View {
             let targetHeight = targetWidth * 4/3 // 3:4 比例
             let targetSize = CGSize(width: targetWidth, height: targetHeight)
             
+            // 先计算总切片数
+            var totalSlices = 0
             for (index, segment) in segments.enumerated() {
                 let isReasoningSection = index == 0 && (segment.hasPrefix("推理过程：") || segment.hasPrefix("思考过程："))
                 
-                // 如果内容较长，进行动态分段
+                if segment.count > 200 {
+                    let subSegments = await dynamicSplitContent(
+                        segment,
+                        targetSize: targetSize,
+                        isReasoning: isReasoningSection
+                    )
+                    totalSlices += subSegments.count
+                } else {
+                    totalSlices += 1
+                }
+            }
+            
+            // 然后生成切片图片
+            for (index, segment) in segments.enumerated() {
+                let isReasoningSection = index == 0 && (segment.hasPrefix("推理过程：") || segment.hasPrefix("思考过程："))
+                
                 if segment.count > 200 {
                     let subSegments = await dynamicSplitContent(
                         segment,
@@ -406,7 +423,7 @@ struct ImagePreviewView: View {
                         if let slicedImage = await generateImageForSegment(
                             subSegment,
                             index: currentIndex,
-                            total: segments.count,
+                            total: totalSlices, // 使用计算出的总数
                             targetSize: targetSize,
                             isReasoning: isReasoningSection
                         ) {
@@ -418,7 +435,7 @@ struct ImagePreviewView: View {
                     if let slicedImage = await generateImageForSegment(
                         segment,
                         index: currentIndex,
-                        total: segments.count,
+                        total: totalSlices, // 使用计算出的总数
                         targetSize: targetSize,
                         isReasoning: isReasoningSection
                     ) {
