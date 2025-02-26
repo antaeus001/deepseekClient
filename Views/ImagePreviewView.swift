@@ -452,6 +452,35 @@ struct ImagePreviewView: View {
         }
     }
     
+    private func isValidCodeBlockStart(_ line: String) -> (isValid: Bool, language: String?) {
+        // 首先检查是否是 Markdown 标题或列表
+        if line.hasPrefix("#") || 
+           line.hasPrefix("-") || 
+           line.hasPrefix("*") || 
+           line.hasPrefix(">") ||
+           line.contains("：") ||  // 检查中文冒号
+           line.contains(":") {    // 检查英文冒号
+            return (false, nil)
+        }
+        
+        if line.hasPrefix("```") && line.count > 3 {
+            let languageIdentifier = line.dropFirst(3).trimmingCharacters(in: .whitespaces)
+            
+            // 检查是否是有效的编程语言标识符
+            let validLanguages = ["swift", "python", "java", "javascript", "typescript", "cpp", "c", "go", "rust", "kotlin", "ruby", "php"]
+            
+            // 1. 必须完全匹配语言标识符（不区分大小写）
+            // 2. 不能包含任何其他字符
+            let normalizedIdentifier = languageIdentifier.lowercased()
+            
+            // 只有当完全匹配编程语言列表中的某一个时才认为是代码块
+            if validLanguages.contains(normalizedIdentifier) {
+                return (true, languageIdentifier)
+            }
+        }
+        return (false, nil)
+    }
+    
     private func dynamicSplitContent(_ content: String, targetSize: CGSize, isReasoning: Bool) async -> [String] {
         var segments: [String] = []
         let lines = content.components(separatedBy: .newlines)
@@ -462,63 +491,52 @@ struct ImagePreviewView: View {
         while index < lines.count {
             let line = lines[index]
             
-            // 检测代码块的开始
-            if line.hasPrefix("```") && line.count > 3 {
-                // 检查是否是真正的代码块（必须包含语言标识符）
-                let languageIdentifier = line.dropFirst(3).trimmingCharacters(in: .whitespaces)
-                let isValidLanguage = languageIdentifier.range(of: "^[a-zA-Z0-9]+$", options: .regularExpression) != nil
+            // 使用新的检测方法
+            let (isCodeBlock, language) = isValidCodeBlockStart(line)
+            if isCodeBlock {
+                // 先检查当前代码块的大小
+                var codeBlockLines = [line]
+                var tempIndex = index + 1
+                var foundEnd = false
                 
-                // 只有当语言标识符是有效的编程语言时才处理为代码块
-                if !languageIdentifier.isEmpty && isValidLanguage {
-                    // 先检查当前代码块的大小
-                    var codeBlockLines = [line]
-                    var tempIndex = index + 1
-                    var foundEnd = false
+                // 收集代码块内容直到找到结束标记
+                while tempIndex < lines.count {
+                    let codeLine = lines[tempIndex]
+                    codeBlockLines.append(codeLine)
+                    if codeLine.trimmingCharacters(in: .whitespaces) == "```" {
+                        foundEnd = true
+                        break
+                    }
+                    tempIndex += 1
+                }
+                
+                if foundEnd {
+                    // 检查当前内容加上代码块的高度是否超出
+                    let testContent = currentSegment + codeBlockLines
+                    let testContentStr = testContent.joined(separator: "\n")
+                    let fittingHeight = await calculateContentHeight(
+                        testContentStr,
+                        width: targetSize.width,
+                        isReasoning: isReasoning,
+                        isFirstSegment: isFirst
+                    )
                     
-                    // 收集代码块内容直到找到结束标记
-                    while tempIndex < lines.count {
-                        let codeLine = lines[tempIndex]
-                        codeBlockLines.append(codeLine)
-                        if codeLine.trimmingCharacters(in: .whitespaces) == "```" {
-                            foundEnd = true
-                            break
+                    if fittingHeight > targetSize.height * 0.85 {
+                        // 如果超出，先保存当前段落
+                        if !currentSegment.isEmpty {
+                            let segment = currentSegment.joined(separator: "\n")
+                            segments.append(segment)
+                            currentSegment = []
+                            isFirst = false
                         }
-                        tempIndex += 1
+                        // 然后将代码块作为新的段落
+                        currentSegment = codeBlockLines
+                    } else {
+                        // 如果没超出，直接添加代码块到当前段落
+                        currentSegment.append(contentsOf: codeBlockLines)
                     }
                     
-                    if foundEnd {
-                        // 检查当前内容加上代码块的高度是否超出
-                        let testContent = currentSegment + codeBlockLines
-                        let testContentStr = testContent.joined(separator: "\n")
-                        let fittingHeight = await calculateContentHeight(
-                            testContentStr,
-                            width: targetSize.width,
-                            isReasoning: isReasoning,
-                            isFirstSegment: isFirst
-                        )
-                        
-                        if fittingHeight > targetSize.height * 0.85 {
-                            // 如果超出，先保存当前段落
-                            if !currentSegment.isEmpty {
-                                let segment = currentSegment.joined(separator: "\n")
-                                segments.append(segment)
-                                currentSegment = []
-                                isFirst = false
-                            }
-                            // 然后将代码块作为新的段落
-                            currentSegment = codeBlockLines
-                        } else {
-                            // 如果没超出，直接添加代码块到当前段落
-                            currentSegment.append(contentsOf: codeBlockLines)
-                        }
-                        
-                        index = tempIndex + 1
-                        continue
-                    }
-                } else {
-                    // 不是有效的代码块，作为普通文本处理
-                    currentSegment.append(line)
-                    index += 1
+                    index = tempIndex + 1
                     continue
                 }
             } else {
@@ -964,6 +982,36 @@ struct MessageContentViewWithCodeBlockTruncation: View {
         return MessageContentView(content: processedContent)
     }
     
+    private func isValidCodeBlockStart(_ line: String) -> (isValid: Bool, language: String?) {
+        if line.hasPrefix("```") && line.count > 3 {
+            let languageIdentifier = line.dropFirst(3).trimmingCharacters(in: .whitespaces)
+            
+            // 检查是否是有效的编程语言标识符
+            // 1. 不能包含空格
+            // 2. 不能包含冒号、点号或其他标点符号
+            // 3. 必须是常见的编程语言标识符
+            // 4. 不能是 markdown 标题格式（###）
+            // 5. 不能包含中文
+            let validLanguages = ["swift", "python", "java", "javascript", "typescript", "cpp", "c", "go", "rust", "kotlin", "ruby", "php"]
+            
+            // 检查是否包含中文字符
+            let containsChinese = languageIdentifier.range(of: "\\p{Han}", options: .regularExpression) != nil
+            // 检查是否包含标点符号
+            let containsPunctuation = languageIdentifier.range(of: "[\\p{P}\\p{S}]", options: .regularExpression) != nil
+            // 检查是否是 markdown 标题
+            let isMarkdownTitle = languageIdentifier.hasPrefix("#") || languageIdentifier.contains(".")
+            
+            if !languageIdentifier.contains(" ") && 
+               !containsPunctuation &&
+               !containsChinese &&
+               !isMarkdownTitle &&
+               validLanguages.contains(languageIdentifier.lowercased()) {
+                return (true, languageIdentifier)
+            }
+        }
+        return (false, nil)
+    }
+    
     private func processContent() -> String {
         let lines = content.components(separatedBy: .newlines)
         var currentLines: [String] = []
@@ -977,13 +1025,11 @@ struct MessageContentViewWithCodeBlockTruncation: View {
             // 检测代码块的开始和结束
             if line.hasPrefix("```") {
                 if !inCodeBlock {
-                    // 检查是否是真正的代码块开始
-                    let languageIdentifier = line.dropFirst(3).trimmingCharacters(in: .whitespaces)
-                    let isValidLanguage = languageIdentifier.range(of: "^[a-zA-Z0-9]+$", options: .regularExpression) != nil
-                    
-                    if !languageIdentifier.isEmpty && isValidLanguage {
+                    // 使用相同的验证逻辑
+                    let (isValid, language) = isValidCodeBlockStart(line)
+                    if isValid {
                         inCodeBlock = true
-                        codeBlockLanguage = languageIdentifier
+                        codeBlockLanguage = language
                     }
                 } else if line.trimmingCharacters(in: .whitespaces) == "```" {
                     inCodeBlock = false
