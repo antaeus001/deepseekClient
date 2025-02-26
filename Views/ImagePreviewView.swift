@@ -386,9 +386,10 @@ struct ImagePreviewView: View {
             var slicedImages: [UIImage] = []
             var currentIndex = 0
             
-            // 计算目标尺寸
+            // 计算目标尺寸 - 固定 3:4 比例
             let targetWidth = UIScreen.main.bounds.width
             let targetHeight = targetWidth * 4/3 // 3:4 比例
+            let targetSize = CGSize(width: targetWidth, height: targetHeight)
             
             for (index, segment) in segments.enumerated() {
                 let isReasoningSection = index == 0 && (segment.hasPrefix("推理过程：") || segment.hasPrefix("思考过程："))
@@ -397,7 +398,7 @@ struct ImagePreviewView: View {
                 if segment.count > 200 {
                     let subSegments = await dynamicSplitContent(
                         segment,
-                        targetSize: CGSize(width: targetWidth, height: targetHeight),
+                        targetSize: targetSize,
                         isReasoning: isReasoningSection
                     )
                     
@@ -406,7 +407,7 @@ struct ImagePreviewView: View {
                             subSegment,
                             index: currentIndex,
                             total: segments.count,
-                            targetSize: CGSize(width: targetWidth, height: targetHeight),
+                            targetSize: targetSize,
                             isReasoning: isReasoningSection
                         ) {
                             slicedImages.append(slicedImage)
@@ -418,7 +419,7 @@ struct ImagePreviewView: View {
                         segment,
                         index: currentIndex,
                         total: segments.count,
-                        targetSize: CGSize(width: targetWidth, height: targetHeight),
+                        targetSize: targetSize,
                         isReasoning: isReasoningSection
                     ) {
                         slicedImages.append(slicedImage)
@@ -438,35 +439,152 @@ struct ImagePreviewView: View {
         var segments: [String] = []
         let lines = content.components(separatedBy: .newlines)
         var currentSegment: [String] = []
+        var isFirst = true
+        var index = 0
         
-        for line in lines {
+        while index < lines.count {
+            let line = lines[index]
             currentSegment.append(line)
             let currentContent = currentSegment.joined(separator: "\n")
             
-            // 检查当前内容生成的图片高度是否超过目标高度
-            if let testImage = await generateTestImage(currentContent, targetSize: targetSize, isReasoning: isReasoning) {
-                if testImage.size.height > targetSize.height {
-                    // 如果超过目标高度，保存之前的段落
-                    if currentSegment.count > 1 {
-                        let previousSegment = Array(currentSegment.dropLast())
-                        segments.append(previousSegment.joined(separator: "\n"))
-                        // 开始新的段落，从当前行开始
-                        currentSegment = [line]
-                    } else {
-                        // 如果单行就超过了，强制分段
-                        segments.append(currentContent)
-                        currentSegment = []
+            // 检查当前内容生成的图片高度
+            let fittingHeight = await calculateContentHeight(
+                currentContent, 
+                width: targetSize.width, 
+                isReasoning: isReasoning,
+                isFirstSegment: isFirst
+            )
+            
+            if fittingHeight > targetSize.height * 0.85 {
+                if currentSegment.count > 1 {
+                    // 回退一行
+                    currentSegment.removeLast()
+                    index -= 1 // 回退索引，下一次循环会重新处理这一行
+                    
+                    // 保存当前段落
+                    let segment = currentSegment.joined(separator: "\n")
+                    if !segment.isEmpty {
+                        segments.append(segment)
+                        isFirst = false
+                    }
+                    
+                    // 开始新的段落
+                    currentSegment = []
+                } else {
+                    // 如果只有一行，需要强制分段
+                    // 先保存当前行
+                    segments.append(line)
+                    isFirst = false
+                    currentSegment = []
+                    
+                    // 继续处理下一行
+                    index += 1
+                }
+            } else {
+                // 内容未超出，继续添加下一行
+                index += 1
+                
+                // 如果是最后一行或者已经处理完所有行，保存当前段落
+                if index >= lines.count {
+                    let segment = currentSegment.joined(separator: "\n")
+                    if !segment.isEmpty {
+                        segments.append(segment)
                     }
                 }
             }
         }
         
-        // 添加最后一个段落
+        // 确保没有遗漏的内容
         if !currentSegment.isEmpty {
-            segments.append(currentSegment.joined(separator: "\n"))
+            let finalSegment = currentSegment.joined(separator: "\n")
+            if !finalSegment.isEmpty && !segments.contains(finalSegment) {
+                segments.append(finalSegment)
+            }
+        }
+        
+        // 打印日志以便调试
+        print("原始内容行数: \(lines.count)")
+        print("分割后段落数: \(segments.count)")
+        for (i, segment) in segments.enumerated() {
+            print("段落 \(i + 1) 行数: \(segment.components(separatedBy: .newlines).count)")
         }
         
         return segments
+    }
+    
+    // 添加一个辅助函数来计算内容高度
+    private func calculateContentHeight(_ content: String, width: CGFloat, isReasoning: Bool, isFirstSegment: Bool = false) async -> CGFloat {
+        return await MainActor.run {
+            let contentView = VStack(alignment: .leading, spacing: 16) {
+                // 添加问题部分（仅在第一个分段）
+                if isFirstSegment, let userContent = userContent {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("问题")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.gray)
+                        
+                        Text(userContent)
+                            .font(.system(size: 15))
+                            .foregroundColor(.black)
+                            .lineLimit(2)
+                    }
+                    .padding(.horizontal, 50)
+                    .padding(.vertical, 20)
+                    .padding(.bottom, 10)
+                    .overlay(
+                        Rectangle()
+                            .frame(height: 1)
+                            .foregroundColor(Color.gray.opacity(0.2)),
+                        alignment: .bottom
+                    )
+                }
+                
+                if isReasoning {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "brain")
+                                .foregroundColor(.blue)
+                            Text("推理过程")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.blue)
+                        }
+                        .padding(.bottom, 4)
+                        
+                        MessageContentView(content: content)
+                    }
+                    .padding(.horizontal, 50)
+                    .padding(.vertical, 40)
+                    .overlay(
+                        Rectangle()
+                            .fill(Color.blue.opacity(0.6))
+                            .frame(width: 4)
+                            .padding(.vertical, 20),
+                        alignment: .leading
+                    )
+                } else {
+                    MessageContentView(content: content)
+                        .padding(.horizontal, 50)
+                        .padding(.vertical, 40)
+                }
+            }
+            .frame(width: width)
+            
+            let controller = UIHostingController(rootView: contentView)
+            let view = controller.view!
+            
+            // 设置宽度并获取适合的高度
+            view.frame = CGRect(origin: .zero, size: CGSize(width: width, height: UIView.layoutFittingExpandedSize.height))
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
+            
+            let fittingSize = view.systemLayoutSizeFitting(
+                CGSize(width: width, height: UIView.layoutFittingExpandedSize.height),
+                withHorizontalFittingPriority: .required,
+                verticalFittingPriority: .fittingSizeLevel
+            )
+            
+            return fittingSize.height
+        }
     }
     
     private func generateTestImage(_ content: String, targetSize: CGSize, isReasoning: Bool) async -> UIImage? {
@@ -622,14 +740,8 @@ struct ImagePreviewView: View {
                 verticalFittingPriority: .fittingSizeLevel
             )
             
-            // 设置最终尺寸，确保不小于目标高度
-            let finalSize = CGSize(
-                width: targetSize.width,
-                height: max(targetSize.height, fittingSize.height)
-            )
-            
-            // 设置视图frame
-            view.frame = CGRect(origin: .zero, size: finalSize)
+            // 设置最终尺寸为目标尺寸
+            view.frame = CGRect(origin: .zero, size: targetSize)
             view.backgroundColor = .white
             
             // 强制布局
@@ -637,12 +749,12 @@ struct ImagePreviewView: View {
             view.layoutIfNeeded()
             
             // 创建图片上下文并渲染
-            UIGraphicsBeginImageContextWithOptions(finalSize, true, UIScreen.main.scale)
+            UIGraphicsBeginImageContextWithOptions(targetSize, true, UIScreen.main.scale)
             defer { UIGraphicsEndImageContext() }
             
             // 填充白色背景
             UIColor.white.setFill()
-            UIRectFill(CGRect(origin: .zero, size: finalSize))
+            UIRectFill(CGRect(origin: .zero, size: targetSize))
             
             // 渲染视图层级
             view.layer.render(in: UIGraphicsGetCurrentContext()!)
@@ -657,8 +769,8 @@ struct ImagePreviewView: View {
             
             // 在底部居中绘制水印
             let watermarkPoint = CGPoint(
-                x: (finalSize.width - watermarkSize.width) / 2,
-                y: finalSize.height - watermarkSize.height - 16
+                x: (targetSize.width - watermarkSize.width) / 2,
+                y: targetSize.height - watermarkSize.height - 16
             )
             watermark.draw(at: watermarkPoint, withAttributes: attributes)
             
@@ -672,8 +784,8 @@ struct ImagePreviewView: View {
             
             // 在右下角绘制序号
             let pagePoint = CGPoint(
-                x: finalSize.width - pageSize.width - 20,
-                y: finalSize.height - pageSize.height - 16
+                x: targetSize.width - pageSize.width - 20,
+                y: targetSize.height - pageSize.height - 16
             )
             pageNumber.draw(at: pagePoint, withAttributes: pageAttributes)
             
